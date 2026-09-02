@@ -175,5 +175,6 @@ pyrightconfig.json
 
 # End of https://www.toptal.com/developers/gitignore/api/python
 
-VOSR2.md
+
 VOSR2-initial-spec.md
+.env
