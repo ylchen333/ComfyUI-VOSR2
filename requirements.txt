@@ -1,0 +1,2 @@
+# VOSR2 targets zero new dependencies: safetensors and einops (the only
+# libraries this package imports beyond torch) already ship with ComfyUI.

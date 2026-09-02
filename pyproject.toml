@@ -1,0 +1,17 @@
+[project]
+name = "comfyui-vosr2"
+description = "ComfyUI node for VOSR 2.0 (one-step 1.4B) image super-resolution."
+version = "0.1.0"
+license = {file = "LICENSE"}
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/ylchen333/ComfyUI-VOSR2"
+"Official Model" = "https://huggingface.co/CSWRY/VOSR"
+"Official Project" = "https://github.com/cswry/VOSR"
+
+[tool.comfy]
+PublisherId = "ylchen333"
+DisplayName = "VOSR 2.0"
+Icon = ""
+includes = []
