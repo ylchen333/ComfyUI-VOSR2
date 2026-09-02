@@ -249,7 +249,7 @@ architectures, ComfyUI-managed load/offload via `ModelPatcher`, untiled and tile
 (DiT + VAE) inference, per-item seeded batching, and torch-native
 `wavelet` / `adain` / `none` color alignment. Not yet done: numeric validation
 against the upstream reference, measured VRAM/tile presets, and example workflow
-JSON. See [`VOSR2.md`](VOSR2.md) for the full design spec.
+JSON.
 
 ## Licensing
 
