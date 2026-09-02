@@ -1,10 +1,10 @@
-name: Publish to Comfy registry
+name: Publish to Comfy Registry
+
 on:
   workflow_dispatch:
   push:
     branches:
       - main
-      - master
     paths:
       - "pyproject.toml"
 
@@ -13,15 +13,14 @@ permissions:
 
 jobs:
   publish-node:
-    name: Publish Custom Node to registry
+    name: Publish custom node to the Comfy Registry
     runs-on: ubuntu-latest
+    # Skip on forks: only the canonical repo holds REGISTRY_ACCESS_TOKEN.
     if: ${{ github.repository_owner == 'ylchen333' }}
     steps:
       - name: Check out code
         uses: actions/checkout@v4
-        with:
-          submodules: true
-      - name: Publish Custom Node
+      - name: Publish custom node
         uses: Comfy-Org/publish-node-action@v1
         with:
           personal_access_token: ${{ secrets.REGISTRY_ACCESS_TOKEN }}
