@@ -3,7 +3,7 @@ name = "comfyui-vosr2"
 description = "ComfyUI node for VOSR 2.0 (one-step 1.4B) image super-resolution."
 version = "0.1.0"
 license = {file = "LICENSE"}
-dependencies = []
+dependencies = ["huggingface_hub"]
 
 [project.urls]
 Repository = "https://github.com/ylchen333/ComfyUI-VOSR2"

@@ -16,11 +16,11 @@ class VOSR2ModelLoader(io.ComfyNode):
             node_id="VOSR2ModelLoader",
             display_name="VOSR 2.0 Model Loader",
             category="image/upscaling/VOSR2",
-            description="Load a local VOSR 2.0 (one-step 1.4B) bundle: LightningDiT, Qwen-Image 2D VAE, and DINOv2-L vision encoder.",
+            description="Load a VOSR 2.0 (one-step 1.4B) bundle: LightningDiT, Qwen-Image 2D VAE, and DINOv2-L vision encoder. Missing files are downloaded from the CSWRY/VOSR Hugging Face repo on first run.",
             inputs=[
-                io.Combo.Input("model", options=loader.list_model_bundles(), tooltip="VOSR 2.0 bundle under models/vosr2/."),
-                io.Combo.Input("vae", options=loader.list_vae_bundles(), tooltip="Qwen-Image 2D VAE under models/vae/VOSR2/."),
-                io.Combo.Input("vision_encoder", options=loader.list_vision_encoders(), tooltip="DINOv2-L checkpoint under models/clip_vision/VOSR2/."),
+                io.Combo.Input("model", options=loader.model_options(), default=loader.KNOWN_MODEL, tooltip="VOSR 2.0 bundle under models/vosr2/. Downloaded from CSWRY/VOSR on first run if absent."),
+                io.Combo.Input("vae", options=loader.vae_options(), default=loader.KNOWN_VAE, tooltip="Qwen-Image 2D VAE under models/vae/VOSR2/. Downloaded from CSWRY/VOSR on first run if absent."),
+                io.Combo.Input("vision_encoder", options=loader.vision_options(), default=loader.KNOWN_VISION, tooltip="DINOv2-L checkpoint under models/clip_vision/VOSR2/. Downloaded from CSWRY/VOSR on first run if absent."),
                 io.Combo.Input("dtype", options=["default", "fp16", "bf16"], default="default", tooltip="Compute dtype for the DiT and vision encoder. The VAE always runs in fp32."),
             ],
             outputs=[

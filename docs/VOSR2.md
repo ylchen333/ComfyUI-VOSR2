@@ -21,7 +21,7 @@ Contacted directly; the following are now confirmed rather than assumed, and sha
 
 ## Goal
 
-Create a native ComfyUI extension that accepts an `IMAGE` batch and returns a VOSR2-restored `IMAGE` batch. It must use local model files, preserve upstream inference behavior, work with ComfyUI memory management, and avoid CLI/file-based image I/O.
+Create a native ComfyUI extension that accepts an `IMAGE` batch and returns a VOSR2-restored `IMAGE` batch. It must preserve upstream inference behavior, work with ComfyUI memory management, and avoid CLI/file-based image I/O. Model files are resolved from `ComfyUI/models/`; any missing piece of the one confirmed component set is downloaded from the pinned `CSWRY/VOSR` Hugging Face repo on first use (see "Model acquisition").
 
 V1 supports only VOSR2: the one-step 1.4B LightningDiT, 16-channel Qwen Image 2D VAE, and DINOv2-L layer-17 conditioning. Training, VOSR 0.5B/1.x, multi-step sampling, SD2, and the lightweight SD2 decoder are out of scope.
 
@@ -38,12 +38,14 @@ Output: private type `VOSR2_MODEL`
 
 | Input | Type/default | Contract |
 |---|---|---|
-| `model` | combo | VOSR2 bundle discovered under `ComfyUI/models/vosr2` |
-| `vae` | combo | Qwen 2D VAE discovered under `ComfyUI/models/vae/VOSR2` |
-| `vision_encoder` | combo | DINOv2-L checkpoint under `ComfyUI/models/clip_vision/VOSR2` |
+| `model` | combo, default `VOSR2` | VOSR2 bundle under `ComfyUI/models/vosr2`; options are the disk scan plus the always-present confirmed name |
+| `vae` | combo, default `Qwen-Image-vae-2d` | Qwen 2D VAE under `ComfyUI/models/vae/VOSR2`; same option rule |
+| `vision_encoder` | combo, default `dinov2_vitl14.safetensors` | DINOv2-L checkpoint under `ComfyUI/models/clip_vision/VOSR2`; same option rule |
 | `dtype` | `default` | `default`, `fp16`, or `bf16`; default follows ComfyUI policy |
 
-The loader returns a runtime bundle containing the config and independently manageable DiT, VAE, and vision-encoder components. It never downloads files.
+The disk scans return `[]` on a fresh install and ComfyUI snapshots combo `options` at schema-build time, so each combo is seeded with the one confirmed name (`_with_known` in `loader.py`). That keeps the dropdown selectable before anything is downloaded; picking it and running triggers the fetch.
+
+The loader returns a runtime bundle containing the config and independently manageable DiT, VAE, and vision-encoder components. On first `execute()` it downloads any missing component of the confirmed set from `CSWRY/VOSR` into `ComfyUI/models/`; once the files are present nothing contacts the network. No download happens at import or validation time, and there is no UI control for it.
 
 ### `VOSR2Upscale`
 
@@ -70,7 +72,7 @@ Register a `vosr2` model folder with `folder_paths.add_model_folder_path`.
 
 ```text
 ComfyUI/models/
-|-- vosr2/VOSR2-1.4B/
+|-- vosr2/VOSR2/
 |   |-- args.json
 |   `-- checkpoints/ema_model.safetensors
 |-- vae/VOSR2/Qwen-Image-vae-2d/
@@ -80,9 +82,33 @@ ComfyUI/models/
     `-- dinov2_vitl14.safetensors
 ```
 
-⚠️ **Open item:** confirm whether the actual downloaded checkpoint folder is named `VOSR2` or something else (e.g. `VOSR_1.4B_os`) before treating `vosr2/VOSR2-1.4B/` above as final. The author's reply resolved the conceptual "VOSR 2.0 vs. VOSR 1" distinction but not the literal folder string — check the real download before locking this path in code or documentation.
+The bundle folder is `VOSR2`, matching the `VOSR2/` directory in the `CSWRY/VOSR`
+HF repo (verified 2026-09-02). `loader.KNOWN_MODEL` / `KNOWN_VAE` / `KNOWN_VISION`
+pin these three names.
 
 Resolve combo values with `folder_paths` containment-safe helpers; workflows must not supply arbitrary paths. Weight selection is deterministic: prefer `clean_weights/ema_model.safetensors`, then `checkpoints/ema_model.safetensors`, then root `ema_model.safetensors`. Never load the first recursive safetensors match.
+
+### Model acquisition
+
+`loader.ensure_vosr2_files(model_name, vae_name, vision_name)` runs at the top of
+`load_vosr2` (i.e. only when the loader node executes). For each of the three
+components, if the selection equals the confirmed name (`KNOWN_MODEL` etc.) **and**
+the expected file(s) are absent, it downloads that component from the pinned
+`HF_REPO_ID = "CSWRY/VOSR"` with `huggingface_hub.hf_hub_download`:
+
+| Component | HF path(s) in `CSWRY/VOSR` | Written to |
+|---|---|---|
+| DiT | `VOSR2/args.json`, `VOSR2/checkpoints/ema_model.safetensors` | `models/vosr2/VOSR2/…` |
+| VAE | `Qwen-Image-vae-2d/{config.json,diffusion_pytorch_model.safetensors}` | `models/vae/VOSR2/Qwen-Image-vae-2d/…` |
+| Vision | `torch_cache/checkpoints/dinov2_vitl14_pretrain.pth` | converted in-process to `models/clip_vision/VOSR2/dinov2_vitl14.safetensors` |
+
+Rules: no network access when the files already exist; nothing downloads at import
+or `VALIDATE_INPUTS` time; only the pinned repo is ever contacted; no
+`trust_remote_code` and no `torch.hub`; a non-`KNOWN_*` selection that is missing
+is *not* fetched (its origin is unknown) and falls through to the normal
+"not found" error. There is deliberately no toggle — the behaviour matches
+LocateAnything (`download_model` default-on) and SeedVR2 (auto-download on first
+use), which is the distribution model the upstream author asked for.
 
 Validate `args.json` before construction:
 
@@ -202,9 +228,9 @@ Separately, ComfyUI-Manager's own docs describe adding a node by submitting a pu
 
 Do not copy upstream `requirements.txt`: it pins PyTorch/CUDA and contains many training-only packages that could break ComfyUI.
 
-Target zero new dependencies. Use ComfyUI/PyTorch equivalents for Accelerate, einops, OpenCV, torchvision transforms, and timm. If the Qwen VAE cannot be cleanly adapted to native ComfyUI code, the only candidate addition is a ComfyUI-compatible `diffusers` version after checking the installed environment.
+Keep dependencies minimal. Use ComfyUI/PyTorch equivalents for Accelerate, einops, OpenCV, torchvision transforms, and timm. The one declared dependency is `huggingface_hub` (already bundled with ComfyUI), used only by `ensure_vosr2_files`. If the Qwen VAE cannot be cleanly adapted to native ComfyUI code, the only other candidate addition is a ComfyUI-compatible `diffusers` version after checking the installed environment.
 
-DINOv2 must be constructed locally and loaded from the chosen checkpoint. Never call `torch.hub.load`; it can execute cached repository code or access the internet.
+DINOv2 must be constructed from the vendored architecture (`models/dinov2.py`) and loaded from a checkpoint file. The loader fetches and converts the official `dinov2_vitl14` weights from `CSWRY/VOSR` when they are absent. Never call `torch.hub.load`; it can execute cached repository code.
 
 ## Reference integration review
 
@@ -240,8 +266,8 @@ Rongyuan named **SeedVR2** (`numz/ComfyUI-SeedVR2_VideoUpscaler`) directly as th
 
 Do not copy these reference behaviors:
 
-- LocateAnything uses `from_pretrained(..., trust_remote_code=True)` and may resolve remote models. VOSR2 must load audited local files only.
-- YOLO contains an HTTP model downloader. VOSR2 must never download during node import, validation, or execution.
+- LocateAnything uses `from_pretrained(..., trust_remote_code=True)` and may resolve arbitrary remote models. VOSR2 builds vendored architectures and loads only the audited `CSWRY/VOSR` checkpoints — no `trust_remote_code`, no arbitrary repo IDs.
+- YOLO's downloader pulls arbitrary GitHub release assets. VOSR2's `ensure_vosr2_files` fetches only the pinned `CSWRY/VOSR` component set, only for paths that are missing, and never at import or validation time.
 - Both examples expose explicit device choices or CUDA-oriented paths. VOSR2 delegates device selection to `comfy.model_management` and does not offer a manual device widget.
 - LocateAnything manually calls `torch.cuda.empty_cache()`. VOSR2 leaves cache and unload policy to ComfyUI.
 - The examples use legacy `NODE_CLASS_MAPPINGS`. VOSR2 uses the supplied `comfy_api.latest` extension entrypoint unless compatibility testing proves the installed ComfyUI version requires a legacy registration shim. Do not maintain two registration systems without that concrete requirement.
@@ -290,7 +316,7 @@ V1 is complete when:
 5. Fixed untiled output matches upstream within an agreed pre-encoding tolerance.
 6. Both tiling modes have full coverage, no obvious seams, and no persistent tensor cache.
 7. ComfyUI can offload/reload components without reconstructing them.
-8. No path downloads, uses `torch.hub`, writes output images, changes global RNG, or replaces the user's PyTorch installation.
+8. No path uses `torch.hub`, writes output images, changes global RNG, or replaces the user's PyTorch installation. Downloads are limited to the pinned `CSWRY/VOSR` repo, happen only when the expected local file is absent, and never occur at import or `VALIDATE_INPUTS` time.
 
 ## Implementation sequence
 

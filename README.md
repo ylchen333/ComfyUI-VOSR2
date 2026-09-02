@@ -9,9 +9,14 @@ upstream [`cswry/VOSR`](https://github.com/cswry/VOSR) repository.
 - Upstream weights: <https://huggingface.co/CSWRY/VOSR>
 - This node package: <https://github.com/ylchen333/ComfyUI-VOSR2>
 
-The nodes load **local files only** — nothing is ever downloaded at import,
-validation, or execution time, and `torch.hub` is never called. You download the
-model files once (below) and place them under your ComfyUI `models/` directory.
+**The model files download themselves on first use.** The first time you run the
+**VOSR 2.0 Model Loader**, any missing component is fetched from the pinned
+[`CSWRY/VOSR`](https://huggingface.co/CSWRY/VOSR) Hugging Face repo into your
+ComfyUI `models/` directory (~7 GB total). Nothing downloads at import or
+validation time, only the one pinned repo is ever contacted, and `torch.hub` is
+never used. If you prefer to place the files by hand, see
+[Model files](#model-files) — the loader skips the download whenever they are
+already present.
 
 ---
 
@@ -26,14 +31,16 @@ upscale node so that queued images do not rebuild several GB of weights.
 
 | Input | Default | Notes |
 |---|---|---|
-| `model` | — | Bundle folder under `models/vosr2/` (must contain `args.json`) |
-| `vae` | — | Qwen-Image 2D VAE folder under `models/vae/VOSR2/` |
-| `vision_encoder` | — | DINOv2-L `.safetensors` under `models/clip_vision/VOSR2/` |
+| `model` | `VOSR2` | Bundle folder under `models/vosr2/` (must contain `args.json`) |
+| `vae` | `Qwen-Image-vae-2d` | Qwen-Image 2D VAE folder under `models/vae/VOSR2/` |
+| `vision_encoder` | `dinov2_vitl14.safetensors` | DINOv2-L `.safetensors` under `models/clip_vision/VOSR2/` |
 | `dtype` | `default` | `default` / `fp16` / `bf16` for the DiT + vision encoder. The VAE always runs in fp32. |
 
-`args.json` is validated against the fixed VOSR 2.0 architecture before anything
-is constructed — an incompatible checkpoint fails loudly instead of loading
-partially.
+Leave the three model dropdowns on their defaults unless you have added your own
+folders. On the first run each missing piece is downloaded from `CSWRY/VOSR`;
+`args.json` is then validated against the fixed VOSR 2.0 architecture before
+anything is constructed — an incompatible checkpoint fails loudly instead of
+loading partially.
 
 ### VOSR 2.0 Upscale (`VOSR2Upscale`)
 
@@ -60,9 +67,13 @@ One-step super-resolution on an `IMAGE` batch.
 
 ## Model files
 
-All four assets come from the official **[CSWRY/VOSR](https://huggingface.co/CSWRY/VOSR)**
-Hugging Face repo. Download them and arrange them like this under your ComfyUI
-install:
+**You normally don't need this section** — the loader downloads everything below
+from [`CSWRY/VOSR`](https://huggingface.co/CSWRY/VOSR) the first time it runs. It's
+here for offline installs, air-gapped machines, or if you'd rather manage the
+files yourself. The loader detects existing files and skips the download.
+
+The assets come from the official **[CSWRY/VOSR](https://huggingface.co/CSWRY/VOSR)**
+Hugging Face repo, arranged like this under your ComfyUI install:
 
 ```
 ComfyUI/models/
@@ -89,17 +100,16 @@ ComfyUI/models/
 | `Qwen-Image-vae-2d/diffusion_pytorch_model.safetensors` | [link](https://huggingface.co/CSWRY/VOSR/resolve/main/Qwen-Image-vae-2d/diffusion_pytorch_model.safetensors) | `models/vae/VOSR2/Qwen-Image-vae-2d/diffusion_pytorch_model.safetensors` |
 | `torch_cache/checkpoints/dinov2_vitl14_pretrain.pth` | [link](https://huggingface.co/CSWRY/VOSR/resolve/main/torch_cache/checkpoints/dinov2_vitl14_pretrain.pth) | convert → `models/clip_vision/VOSR2/dinov2_vitl14.safetensors` (see below) |
 
-> The `model` / `vae` / `vision_encoder` dropdowns list the **folder or file
-> name** shown above (`VOSR2`, `Qwen-Image-vae-2d`, `dinov2_vitl14.safetensors`).
-> You can rename the `vosr2/VOSR2` and `vae/VOSR2/Qwen-Image-vae-2d` folders to
-> anything you like — the loader discovers any subfolder that has the right
-> files inside.
+> The `model` / `vae` / `vision_encoder` dropdowns are seeded with the names
+> above (`VOSR2`, `Qwen-Image-vae-2d`, `dinov2_vitl14.safetensors`) and default
+> to them. You can add extra folders next to these and they'll appear in the
+> dropdowns too — the loader discovers any subfolder with the right files inside
+> — but only the default set is auto-downloaded.
 
-### Convert the DINOv2-L checkpoint to safetensors
-
-The vision encoder in the upstream repo is a raw PyTorch pickle
-(`dinov2_vitl14_pretrain.pth`). This node only loads `.safetensors`. Convert it
-once — run this from a shell where ComfyUI's Python can `import torch`:
+The DINOv2-L file in the repo is a raw PyTorch pickle
+(`dinov2_vitl14_pretrain.pth`); the loader converts it to
+`dinov2_vitl14.safetensors` automatically. To do it by hand, run this where
+ComfyUI's Python can `import torch`:
 
 ```python
 import torch
@@ -109,29 +119,11 @@ sd = torch.load("dinov2_vitl14_pretrain.pth", map_location="cpu", weights_only=T
 save_file({k: v.contiguous() for k, v in sd.items()}, "dinov2_vitl14.safetensors")
 ```
 
-Then move `dinov2_vitl14.safetensors` to `models/clip_vision/VOSR2/`.
-
-The key names in this checkpoint are the original Meta `facebookresearch/dinov2`
-names (`blocks.N.attn.qkv.*`, `blocks.N.ls1.gamma`, …), which is exactly what the
-vendored architecture in [`models/dinov2.py`](models/dinov2.py) expects — do
-**not** use the Hugging Face `transformers` `facebook/dinov2-large` weights, whose
-keys differ.
-
-### One-shot download (optional)
-
-With the `huggingface_hub` CLI:
-
-```bash
-huggingface-cli download CSWRY/VOSR \
-  VOSR2/args.json \
-  VOSR2/checkpoints/ema_model.safetensors \
-  Qwen-Image-vae-2d/config.json \
-  Qwen-Image-vae-2d/diffusion_pytorch_model.safetensors \
-  torch_cache/checkpoints/dinov2_vitl14_pretrain.pth \
-  --local-dir ./vosr2_download
-```
-
-then move each file into place and run the conversion step above.
+then place `dinov2_vitl14.safetensors` in `models/clip_vision/VOSR2/`. The keys
+are the original Meta `facebookresearch/dinov2` names
+(`blocks.N.attn.qkv.*`, `blocks.N.ls1.gamma`, …), matching the vendored
+architecture in [`models/dinov2.py`](models/dinov2.py) — do **not** use the
+Hugging Face `transformers` `facebook/dinov2-large` weights, whose keys differ.
 
 ---
 
@@ -140,17 +132,11 @@ then move each file into place and run the conversion step above.
 ### Local ComfyUI
 
 You need a reasonably recent ComfyUI (one that ships `comfy_api.latest` — any
-build from 2025 onward). No extra Python packages are required: the only imports
-beyond `torch` are `safetensors` and `einops`, both of which already ship with
-ComfyUI.
+build from 2025 onward). The only dependency is `huggingface_hub` (used to fetch
+the weights), which already ships with ComfyUI; `safetensors` and `einops` do
+too.
 
-**Option A — ComfyUI-Manager (recommended)**
-
-1. Open **Manager → Custom Nodes Manager → Install via Git URL**.
-2. Paste `https://github.com/ylchen333/ComfyUI-VOSR2` and confirm.
-3. Restart ComfyUI.
-
-**Option B — git clone**
+**git clone (recommended until the node is on the Comfy Registry)**
 
 ```bash
 cd ComfyUI/custom_nodes
@@ -158,38 +144,55 @@ git clone https://github.com/ylchen333/ComfyUI-VOSR2
 # restart ComfyUI
 ```
 
-Then place the model files as described in [Model files](#model-files) and
-restart once more so the loader picks them up.
+Then add a **VOSR 2.0 Model Loader**, leave the dropdowns on their defaults, and
+run — the ~7 GB of weights download from `CSWRY/VOSR` on that first execution and
+are reused afterward. (To pre-place them instead, see
+[Model files](#model-files).)
+
+#### Installing via Git URL
+
+**Manager → Custom Nodes Manager → Install via Git URL** with
+`https://github.com/ylchen333/ComfyUI-VOSR2` also works, but recent
+ComfyUI-Manager versions gate that button behind **both**:
+
+- `allow_git_url_install = true` in `config.ini` (`[default]` section — the file
+  is at `ComfyUI/user/default/ComfyUI-Manager/config.ini`), and
+- ComfyUI launched on a loopback address (`--listen 127.0.0.1`, `::1`, or no
+  `--listen` at all).
+
+Both are read once at startup, so change them with the server stopped, then
+restart. This is a ComfyUI-Manager policy, unrelated to this node — a plain
+`git clone` sidesteps it entirely, and once the node is published to
+registry.comfy.org it installs through Manager's normal search without either
+toggle.
 
 ### RunComfy
 
-Custom nodes are not yet published on Comfy.org, so on RunComfy you install this
-package the same way you would any GitHub node — but it must be on a
-**persistent / dedicated workspace**, because custom nodes and uploaded models do
-not survive a session on the free shared machines.
+Custom nodes aren't on Comfy.org yet, so install from GitHub. Use a
+**persistent / dedicated workspace** — custom nodes don't survive a session on
+the free shared machines.
 
-1. **Start a dedicated ComfyUI workspace** on RunComfy and pick a recent ComfyUI
-   version.
-2. **Install the node.** In the running ComfyUI, open
-   **Manager → Install via Git URL** and paste
-   `https://github.com/ylchen333/ComfyUI-VOSR2`, then restart the ComfyUI process
-   from the Manager. (If you have terminal access to the workspace you can
-   instead `git clone` it into `ComfyUI/custom_nodes/` as above.)
-3. **Add the model files.** Using RunComfy's file browser / storage manager for
-   the workspace, create the folders and upload the files exactly as in
-   [Model files](#model-files):
-   - `ComfyUI/models/vosr2/VOSR2/…`
-   - `ComfyUI/models/vae/VOSR2/Qwen-Image-vae-2d/…`
-   - `ComfyUI/models/clip_vision/VOSR2/dinov2_vitl14.safetensors`
+1. **Install the node.** In the workspace terminal:
+   ```bash
+   cd /home/user/ComfyUI/custom_nodes
+   git clone https://github.com/ylchen333/ComfyUI-VOSR2
+   ```
+   (Adjust the path if your workspace roots ComfyUI elsewhere, e.g.
+   `/workspace/ComfyUI`. **Manager → Install via Git URL** is usually blocked on
+   RunComfy because the server binds `0.0.0.0` — see
+   [Installing via Git URL](#installing-via-git-url) — so `git clone` is the way.)
+2. **Restart ComfyUI** (RunComfy's **Restart** control or via **Manager**) and
+   reload the page.
+3. **Add a VOSR 2.0 Model Loader**, leave the three dropdowns on their defaults
+   (`VOSR2` / `Qwen-Image-vae-2d` / `dinov2_vitl14.safetensors`), connect it to a
+   **VOSR 2.0 Upscale**, and queue the prompt. On that first run the loader
+   downloads ~7 GB from `CSWRY/VOSR` straight onto the workspace and reuses it
+   afterward.
 
-   Do the `.pth → .safetensors` conversion locally first (the workspace terminal
-   works too if you have it), then upload the resulting `.safetensors`.
-4. **Restart ComfyUI** and add the **VOSR 2.0 Model Loader** node — the three
-   dropdowns should now be populated.
-
-> If your RunComfy plan does not expose a git-install option or a writable
-> `models/` tree, you will need to request the node/models through their support
-> channel; this package cannot self-install or download anything at runtime.
+The loader's own downloader replaces the manual `wget`/upload dance that
+RunComfy's restricted shell (no `python`, no `huggingface-cli`) and browser
+uploads made unreliable. If you still want the files placed by hand, the paths
+are in [Model files](#model-files).
 
 ---
 

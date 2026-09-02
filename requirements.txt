@@ -1,2 +1,5 @@
-# VOSR2 targets zero new dependencies: safetensors and einops (the only
-# libraries this package imports beyond torch) already ship with ComfyUI.
+# Beyond torch, VOSR 2.0 imports only safetensors and einops, both of which ship
+# with ComfyUI. huggingface_hub (also bundled with ComfyUI) is used by the model
+# loader to fetch the confirmed component set from https://huggingface.co/CSWRY/VOSR
+# on first run, only when the files are not already under ComfyUI/models/.
+huggingface_hub

@@ -1,19 +1,24 @@
-"""Local, network-free discovery and strict loading of VOSR 2.0 components.
+"""Discovery and strict loading of VOSR 2.0 components.
 
 Layout (see VOSR2.md "Model layout and discovery"):
     ComfyUI/models/vosr2/<bundle>/args.json + checkpoints/ema_model.safetensors
     ComfyUI/models/vae/VOSR2/<vae>/config.json + diffusion_pytorch_model.safetensors
     ComfyUI/models/clip_vision/VOSR2/<checkpoint>.safetensors
 
+The one confirmed component set is fetched from the pinned Hugging Face repo
+``CSWRY/VOSR`` on first use, but only for paths that are missing -- once the
+files are in place nothing here touches the network. See ``ensure_vosr2_files``.
+
 Every combo value returned to the node UI is later re-joined against its known
 root directory here, never taken as -- or resolved through -- an arbitrary path.
 """
 import json
+import logging
 import re
 from pathlib import Path
 
 import torch
-from safetensors.torch import load_file
+from safetensors.torch import load_file, save_file
 
 import comfy.model_management
 import comfy.model_patcher
@@ -30,6 +35,23 @@ VISION_SUBDIR = "VOSR2"
 _VOSR2_ROOT = Path(folder_paths.models_dir) / "vosr2"
 _VOSR2_ROOT.mkdir(parents=True, exist_ok=True)
 folder_paths.add_model_folder_path(VOSR2_FOLDER_KEY, str(_VOSR2_ROOT))
+
+# The single VOSR 2.0 (one-step 1.4B) component set confirmed to work, and where
+# each piece lives in the pinned Hugging Face repo. These names are also the
+# default combo selections (see ``*_options`` below), so a fresh install always
+# has something selectable even before anything is on disk.
+HF_REPO_ID = "CSWRY/VOSR"
+KNOWN_MODEL = "VOSR2"
+KNOWN_VAE = "Qwen-Image-vae-2d"
+KNOWN_VISION = "dinov2_vitl14.safetensors"
+_DIT_HF_FILES = ("VOSR2/args.json", "VOSR2/checkpoints/ema_model.safetensors")
+_VAE_HF_FILES = (
+    "Qwen-Image-vae-2d/config.json",
+    "Qwen-Image-vae-2d/diffusion_pytorch_model.safetensors",
+)
+# DINOv2-L ships upstream as a raw torch pickle; the loader converts it to
+# safetensors on download (this package only ever ``load_file``s .safetensors).
+_DINOV2_HF_FILE = "torch_cache/checkpoints/dinov2_vitl14_pretrain.pth"
 
 # Required args.json values for a VOSR 2.0 (one-step 1.4B) checkpoint. See
 # VOSR2.md "Author confirmation" -- these fields are confirmed to have no
@@ -117,6 +139,91 @@ def list_vision_encoders() -> list:
     if not root.is_dir():
         return []
     return sorted(p.name for p in root.iterdir() if p.is_file() and p.suffix == ".safetensors")
+
+
+def _with_known(found: list, known: str) -> list:
+    """Combo options: whatever is on disk, but always offering the confirmed set.
+
+    ComfyUI snapshots combo ``options`` when the schema is built, so on a fresh
+    install the disk scans return ``[]`` and the dropdowns would be empty and
+    unselectable. Seeding them with the known name means the user can pick it and
+    run; the loader then downloads that set on first execute.
+    """
+    return found if known in found else [known, *found]
+
+
+def model_options() -> list:
+    return _with_known(list_model_bundles(), KNOWN_MODEL)
+
+
+def vae_options() -> list:
+    return _with_known(list_vae_bundles(), KNOWN_VAE)
+
+
+def vision_options() -> list:
+    return _with_known(list_vision_encoders(), KNOWN_VISION)
+
+
+def _convert_dinov2_pth_to_safetensors(src_pth: Path, dest: Path) -> None:
+    state = torch.load(str(src_pth), map_location="cpu", weights_only=True)
+    if not isinstance(state, dict):
+        raise VOSR2LoadError(
+            f"Unexpected DINOv2 checkpoint format at {src_pth}: expected a flat state dict."
+        )
+    tensors = {k: v.contiguous() for k, v in state.items() if isinstance(v, torch.Tensor)}
+    if not tensors:
+        raise VOSR2LoadError(f"DINOv2 checkpoint at {src_pth} contained no tensors.")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(dest.name + ".tmp")
+    save_file(tensors, str(tmp))
+    tmp.replace(dest)
+
+
+def ensure_vosr2_files(model_name: str, vae_name: str, vision_name: str) -> None:
+    """Fetch the confirmed VOSR 2.0 set from ``CSWRY/VOSR`` for missing paths only.
+
+    A no-op once the files are present -- it never contacts the network then.
+    Only the ``KNOWN_*`` selections can be auto-fetched; a custom folder/file name
+    that is absent is left for the normal "not found" errors in ``load_vosr2``,
+    since this code cannot know where such a file would come from.
+    """
+    vae_base = _vae_root()
+    vision_base = _vision_root()
+
+    dit_missing = model_name == KNOWN_MODEL and not all(
+        (_VOSR2_ROOT / f).is_file() for f in _DIT_HF_FILES
+    )
+    vae_missing = vae_name == KNOWN_VAE and not all(
+        (vae_base / f).is_file() for f in _VAE_HF_FILES
+    )
+    vision_missing = vision_name == KNOWN_VISION and not (vision_base / KNOWN_VISION).is_file()
+
+    if not (dit_missing or vae_missing or vision_missing):
+        return
+
+    try:
+        from huggingface_hub import hf_hub_download
+    except ImportError as exc:
+        raise VOSR2LoadError(
+            "VOSR 2.0 model files are missing and huggingface_hub is not available "
+            "to download them. Install huggingface_hub (it normally ships with "
+            "ComfyUI), or place the files manually -- see the README 'Model files' "
+            "section."
+        ) from exc
+
+    if dit_missing:
+        logging.info("[VOSR2] downloading DiT bundle from %s ...", HF_REPO_ID)
+        for f in _DIT_HF_FILES:
+            hf_hub_download(HF_REPO_ID, f, local_dir=str(_VOSR2_ROOT))
+    if vae_missing:
+        logging.info("[VOSR2] downloading Qwen-Image 2D VAE from %s ...", HF_REPO_ID)
+        vae_base.mkdir(parents=True, exist_ok=True)
+        for f in _VAE_HF_FILES:
+            hf_hub_download(HF_REPO_ID, f, local_dir=str(vae_base))
+    if vision_missing:
+        logging.info("[VOSR2] downloading + converting DINOv2-L encoder from %s ...", HF_REPO_ID)
+        src = hf_hub_download(HF_REPO_ID, _DINOV2_HF_FILE)
+        _convert_dinov2_pth_to_safetensors(Path(src), vision_base / KNOWN_VISION)
 
 
 def _load_args_json(bundle_dir: Path) -> dict:
@@ -260,6 +367,8 @@ class VOSR2Model:
 
 
 def load_vosr2(model_name: str, vae_name: str, vision_name: str, dtype: str) -> VOSR2Model:
+    ensure_vosr2_files(model_name, vae_name, vision_name)
+
     bundle_dir = _safe_child_dir(_VOSR2_ROOT, model_name)
     if not bundle_dir.is_dir():
         raise VOSR2LoadError(f"VOSR2 model bundle not found: {model_name!r}")
