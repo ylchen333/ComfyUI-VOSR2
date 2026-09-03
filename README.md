@@ -168,31 +168,10 @@ toggle.
 
 ### RunComfy
 
-Custom nodes aren't on Comfy.org yet, so install from GitHub. Use a
-**persistent / dedicated workspace** — custom nodes don't survive a session on
-the free shared machines.
-
-1. **Install the node.** In the workspace terminal:
-   ```bash
-   cd /home/user/ComfyUI/custom_nodes
-   git clone https://github.com/ylchen333/ComfyUI-VOSR2
-   ```
-   (Adjust the path if your workspace roots ComfyUI elsewhere, e.g.
-   `/workspace/ComfyUI`. **Manager → Install via Git URL** is usually blocked on
-   RunComfy because the server binds `0.0.0.0` — see
-   [Installing via Git URL](#installing-via-git-url) — so `git clone` is the way.)
-2. **Restart ComfyUI** (RunComfy's **Restart** control or via **Manager**) and
-   reload the page.
-3. **Add a VOSR 2.0 Model Loader**, leave the three dropdowns on their defaults
-   (`VOSR2` / `Qwen-Image-vae-2d` / `dinov2_vitl14.safetensors`), connect it to a
-   **VOSR 2.0 Upscale**, and queue the prompt. On that first run the loader
-   downloads ~7 GB from `CSWRY/VOSR` straight onto the workspace and reuses it
-   afterward.
-
-The loader's own downloader replaces the manual `wget`/upload dance that
-RunComfy's restricted shell (no `python`, no `huggingface-cli`) and browser
-uploads made unreliable. If you still want the files placed by hand, the paths
-are in [Model files](#model-files).
+> **Not yet documented.** A working RunComfy install path has not been
+> confirmed: uploading the model files by hand fails (file-size limit) and the
+> RunComfy terminal whitelist has no `wget`. This section will be written once
+> a success case is verified.
 
 ---
 
