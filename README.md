@@ -177,6 +177,22 @@ toggle.
 
 ## Usage
 
+### Example workflows
+
+- **[`docs/vosr_workflow_examples.json`](docs/vosr_workflow_examples.json)** —
+  a drag-and-drop starter file. Drop it onto the ComfyUI canvas to load
+  ready-made VOSR 2.0 graphs (loader → upscale, tiling presets already wired).
+  The quickest way to get going.
+- **`docs/local_workflow.png`** — the same setup running locally in ComfyUI, for
+  reference:
+
+  ![VOSR 2.0 example workflow in ComfyUI](docs/local_workflow.png)
+
+- **RunComfy** — hosted example-workflow links will be added here once VOSR 2.0
+  is confirmed installable through RunComfy's Node Manager.
+
+### Manual setup
+
 1. **VOSR 2.0 Model Loader** — pick `model` = `VOSR2`, `vae` =
    `Qwen-Image-vae-2d`, `vision_encoder` = `dinov2_vitl14.safetensors`, leave
    `dtype` on `default` (use `fp16`/`bf16` to save VRAM).
@@ -226,12 +242,13 @@ memory; the Qwen VAE always runs in fp32.
 
 ## Status
 
-In-progress v1. Done: local discovery/validation, vendored DiT/VAE/DINOv2
-architectures, ComfyUI-managed load/offload via `ModelPatcher`, untiled and tiled
-(DiT + VAE) inference, per-item seeded batching, and torch-native
-`wavelet` / `adain` / `none` color alignment. Not yet done: numeric validation
-against the upstream reference, measured VRAM/tile presets, and example workflow
-JSON.
+In-progress v1. Done: model discovery/validation, first-run auto-download from
+`CSWRY/VOSR`, vendored DiT/VAE/DINOv2 architectures, ComfyUI-managed load/offload
+via `ModelPatcher`, untiled and tiled (DiT + VAE) inference, per-item seeded
+batching, torch-native `wavelet` / `adain` / `none` color alignment, and a
+drag-and-drop example workflow. Not yet done: numeric validation against the
+upstream reference, measured VRAM/tile presets, and a confirmed RunComfy /
+ComfyUI-Manager install path.
 
 ## Licensing
 
