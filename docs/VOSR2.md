@@ -38,12 +38,22 @@ Output: private type `VOSR2_MODEL`
 
 | Input | Type/default | Contract |
 |---|---|---|
-| `model` | combo, default `VOSR2` | VOSR2 bundle under `ComfyUI/models/vosr2`; options are the disk scan plus the always-present confirmed name |
-| `vae` | combo, default `Qwen-Image-vae-2d` | Qwen 2D VAE under `ComfyUI/models/vae/VOSR2`; same option rule |
-| `vision_encoder` | combo, default `dinov2_vitl14.safetensors` | DINOv2-L checkpoint under `ComfyUI/models/clip_vision/VOSR2`; same option rule |
+| `model` | combo, default `VOSR2` | VOSR2 bundle folder under `ComfyUI/models/vosr2`; options are the disk scan plus the always-present confirmed name |
 | `dtype` | `default` | `default`, `fp16`, or `bf16`; default follows ComfyUI policy |
 
-The disk scans return `[]` on a fresh install and ComfyUI snapshots combo `options` at schema-build time, so each combo is seeded with the one confirmed name (`_with_known` in `loader.py`). That keeps the dropdown selectable before anything is downloaded; picking it and running triggers the fetch.
+VOSR 2.0 is a **fixed, tightly coupled DiT/VAE/vision triple** — the DiT operates
+entirely in *this* Qwen 2D VAE's latent space (its channel count, downsample
+factor, and per-channel `latents_mean`/`latents_std`) and is conditioned on
+*this* DINOv2-L feature extractor. None of the three can be substituted, so the
+VAE and vision encoder are **bundle internals, not inputs**: a bundle folder
+contains all three (see "Model layout and discovery"). Only `model` and `dtype`
+are exposed.
+
+`list_model_bundles()` returns `[]` on a fresh install and ComfyUI snapshots
+combo `options` at schema-build time, so the `model` combo is seeded with the
+confirmed bundle name (`model_options()` in `loader.py`). That keeps the dropdown
+selectable before anything is downloaded; picking it and running triggers the
+fetch.
 
 The loader returns a runtime bundle containing the config and independently manageable DiT, VAE, and vision-encoder components. On first `execute()` it downloads any missing component of the confirmed set from `CSWRY/VOSR` into `ComfyUI/models/`; once the files are present nothing contacts the network. No download happens at import or validation time, and there is no UI control for it.
 
@@ -70,41 +80,49 @@ Do not expose `infer_steps` in v1. VOSR2 is released as a one-step model; arbitr
 
 Register a `vosr2` model folder with `folder_paths.add_model_folder_path`.
 
+A bundle is one self-contained folder — DiT, its matched VAE, and its vision
+encoder together. VOSR 2.0's VAE and DINOv2-L are not independently selectable
+(the DiT is trained against this VAE's exact latent statistics and this feature
+extractor), so they are not put in ComfyUI's shared `vae/` and `clip_vision/`
+trees, where they would only clutter other nodes' dropdowns and can't be used by
+a stock loader anyway.
+
 ```text
-ComfyUI/models/
-|-- vosr2/VOSR2/
-|   |-- args.json
-|   `-- checkpoints/ema_model.safetensors
-|-- vae/VOSR2/Qwen-Image-vae-2d/
+ComfyUI/models/vosr2/VOSR2/
+|-- args.json
+|-- checkpoints/ema_model.safetensors        (or clean_weights/, or the bundle root)
+|-- Qwen-Image-vae-2d/
 |   |-- config.json
 |   `-- diffusion_pytorch_model.safetensors
-`-- clip_vision/VOSR2/
-    `-- dinov2_vitl14.safetensors
+`-- dinov2_vitl14.safetensors
 ```
 
 The bundle folder is `VOSR2`, matching the `VOSR2/` directory in the `CSWRY/VOSR`
-HF repo (verified 2026-09-02). `loader.KNOWN_MODEL` / `KNOWN_VAE` / `KNOWN_VISION`
-pin these three names.
+HF repo (verified 2026-09-02). `loader.KNOWN_MODEL` pins the name; `_VAE_SUBDIR`
+and `_VISION_FILENAME` pin the two internal paths.
 
-Resolve combo values with `folder_paths` containment-safe helpers; workflows must not supply arbitrary paths. Weight selection is deterministic: prefer `clean_weights/ema_model.safetensors`, then `checkpoints/ema_model.safetensors`, then root `ema_model.safetensors`. Never load the first recursive safetensors match.
+Resolve the `model` combo value with a `folder_paths` containment-safe helper
+(`_safe_child_dir`); workflows must not supply arbitrary paths. DiT weight
+selection is deterministic: prefer `clean_weights/ema_model.safetensors`, then
+`checkpoints/ema_model.safetensors`, then the bundle root. Never load the first
+recursive safetensors match.
 
 ### Model acquisition
 
-`loader.ensure_vosr2_files(model_name, vae_name, vision_name)` runs at the top of
-`load_vosr2` (i.e. only when the loader node executes). For each of the three
-components, if the selection equals the confirmed name (`KNOWN_MODEL` etc.) **and**
-the expected file(s) are absent, it downloads that component from the pinned
+`loader.ensure_vosr2_files(model_name)` runs at the top of `load_vosr2` (i.e. only
+when the loader node executes). If `model_name` is the confirmed bundle
+(`KNOWN_MODEL`) and any part is absent, that part is downloaded from the pinned
 `HF_REPO_ID = "CSWRY/VOSR"` with `huggingface_hub.hf_hub_download`:
 
-| Component | HF path(s) in `CSWRY/VOSR` | Written to |
+| Part | HF path(s) in `CSWRY/VOSR` | Written to |
 |---|---|---|
 | DiT | `VOSR2/args.json`, `VOSR2/checkpoints/ema_model.safetensors` | `models/vosr2/VOSR2/…` |
-| VAE | `Qwen-Image-vae-2d/{config.json,diffusion_pytorch_model.safetensors}` | `models/vae/VOSR2/Qwen-Image-vae-2d/…` |
-| Vision | `torch_cache/checkpoints/dinov2_vitl14_pretrain.pth` | converted in-process to `models/clip_vision/VOSR2/dinov2_vitl14.safetensors` |
+| VAE | `Qwen-Image-vae-2d/{config.json,diffusion_pytorch_model.safetensors}` | `models/vosr2/VOSR2/Qwen-Image-vae-2d/…` |
+| Vision | `torch_cache/checkpoints/dinov2_vitl14_pretrain.pth` | converted in-process to `models/vosr2/VOSR2/dinov2_vitl14.safetensors` |
 
 Rules: no network access when the files already exist; nothing downloads at import
 or `VALIDATE_INPUTS` time; only the pinned repo is ever contacted; no
-`trust_remote_code` and no `torch.hub`; a non-`KNOWN_*` selection that is missing
+`trust_remote_code` and no `torch.hub`; a non-`KNOWN_MODEL` bundle that is missing
 is *not* fetched (its origin is unknown) and falls through to the normal
 "not found" error. There is deliberately no toggle — the behaviour matches
 LocateAnything (`download_model` default-on) and SeedVR2 (auto-download on first
@@ -193,9 +211,10 @@ ComfyUI-VOSR2/
 |   `-- swiglu_ffn.py
 |-- requirements.txt
 |-- pyproject.toml
-|-- examples/
-|   |-- vosr2_basic.json
-|   `-- vosr2_basic_api.json
+|-- example_workflows/
+|   |-- vosr_workflow_examples.json
+|   `-- local_workflow.png
+|-- docs/                       (design notes; excluded from the Registry package via .comfyignore)
 |-- LICENSE
 `-- README.md
 ```
@@ -258,7 +277,7 @@ Rongyuan named **SeedVR2** (`numz/ComfyUI-SeedVR2_VideoUpscaler`) directly as th
 
 | Pattern | Reference evidence | VOSR2 consideration |
 |---|---|---|
-| Split loader nodes per component, not one combined loader | SeedVR2 has separate **Load DiT**, **Load VAE**, and (optional) **Torch Compile Settings** nodes feeding one execution node, enabling a "global model cache" shared across multiple upscaler instances | **Open question, not yet decided:** this spec currently has one `VOSR2ModelLoader` covering DiT+VAE+vision-encoder via three combo widgets. SeedVR2's split lets a user swap just the VAE or just the DiT without reloading everything else, and matches the exact pattern the author pointed to. Worth deciding deliberately whether to split `VOSR2ModelLoader` into `VOSR2DiTLoader` + `VOSR2VAELoader` (+ vision-encoder loader) before locking the Nodes section, rather than defaulting to the simpler combined loader just because it's already written here. |
+| Split loader nodes per component, not one combined loader | SeedVR2 has separate **Load DiT**, **Load VAE**, and (optional) **Torch Compile Settings** nodes feeding one execution node, enabling a "global model cache" shared across multiple upscaler instances | **Resolved (2026-09-03): not applicable.** SeedVR2's split exists so a user can swap the VAE or DiT independently. The upstream author confirmed VOSR 2.0 is a fixed, tightly coupled DiT/VAE pair (the DiT lives in this VAE's latent space) with a fixed DINOv2-L extractor, so there is nothing to swap. One `VOSR2ModelLoader` with a single `model` combo; the VAE and vision encoder are bundle internals, downloaded/discovered alongside the DiT under `models/vosr2/<bundle>/`. |
 | Per-component, independent offload targets | SeedVR2: DiT, VAE, and intermediate tensors each independently configurable to GPU / CPU / secondary GPU; "BlockSwap" streams transformer blocks between GPU/CPU for large models | This spec's existing "give DiT, VAE, and DINOv2 ComfyUI-compatible loading/offload wrappers so only the active phase must be resident" already points the same direction — SeedVR2 confirms this is the expected level of granularity for a Registry-quality node, not over-engineering. |
 | Local imports to avoid ComfyUI environment conflicts | SeedVR2 explicitly documents "local imports prevent conflicts with other ComfyUI custom nodes" and graceful fallback chains for optional deps (Flash/Sage attention → PyTorch SDPA) | Matches this spec's "target zero new dependencies" / vendor-only-what's-needed stance under Dependencies. Adopt the fallback-chain idea specifically for anything optional (e.g. if a faster attention backend is available, use it; otherwise fall back cleanly rather than hard-requiring it). |
 | Minimal single-node pattern for a smaller model | HYPIR-ComfyUI ships one execution node (`HYPIR Image Restore`), model file discovered via a dropdown scan of a `models/` folder, tiled VAE decode with user-adjustable tile/stride | Useful lower bound — if the DiT/VAE loader split above turns out to be more complexity than VOSR2 needs at this size (1.4B, single model family, no video/temporal dimension like SeedVR2), HYPIR's simpler shape is the fallback to compare against. |

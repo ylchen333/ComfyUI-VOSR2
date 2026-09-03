@@ -69,8 +69,6 @@
       },
       "widgets_values": [
         "VOSR2",
-        "Qwen-Image-vae-2d",
-        "dinov2_vitl14.safetensors",
         "default"
       ],
       "widgets_values_named": {
@@ -234,8 +232,6 @@
       },
       "widgets_values": [
         "VOSR2",
-        "Qwen-Image-vae-2d",
-        "dinov2_vitl14.safetensors",
         "default"
       ],
       "widgets_values_named": {

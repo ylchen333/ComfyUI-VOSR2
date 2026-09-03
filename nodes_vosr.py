@@ -16,11 +16,9 @@ class VOSR2ModelLoader(io.ComfyNode):
             node_id="VOSR2ModelLoader",
             display_name="VOSR 2.0 Model Loader",
             category="image/upscaling/VOSR2",
-            description="Load a VOSR 2.0 (one-step 1.4B) bundle: LightningDiT, Qwen-Image 2D VAE, and DINOv2-L vision encoder. Missing files are downloaded from the CSWRY/VOSR Hugging Face repo on first run.",
+            description="Load a VOSR 2.0 (one-step 1.4B) bundle: matched LightningDiT + Qwen-Image 2D VAE + DINOv2-L. The whole bundle is downloaded from the CSWRY/VOSR Hugging Face repo on first run if absent.",
             inputs=[
-                io.Combo.Input("model", options=loader.model_options(), default=loader.KNOWN_MODEL, tooltip="VOSR 2.0 bundle under models/vosr2/. Downloaded from CSWRY/VOSR on first run if absent."),
-                io.Combo.Input("vae", options=loader.vae_options(), default=loader.KNOWN_VAE, tooltip="Qwen-Image 2D VAE under models/vae/VOSR2/. Downloaded from CSWRY/VOSR on first run if absent."),
-                io.Combo.Input("vision_encoder", options=loader.vision_options(), default=loader.KNOWN_VISION, tooltip="DINOv2-L checkpoint under models/clip_vision/VOSR2/. Downloaded from CSWRY/VOSR on first run if absent."),
+                io.Combo.Input("model", options=loader.model_options(), default=loader.KNOWN_MODEL, tooltip="VOSR 2.0 bundle folder under models/vosr2/ (DiT + its matched VAE + vision encoder). Downloaded from CSWRY/VOSR on first run if absent."),
                 io.Combo.Input("dtype", options=["default", "fp16", "bf16"], default="default", tooltip="Compute dtype for the DiT and vision encoder. The VAE always runs in fp32."),
             ],
             outputs=[
@@ -29,8 +27,8 @@ class VOSR2ModelLoader(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, model, vae, vision_encoder, dtype) -> io.NodeOutput:
-        bundle = loader.load_vosr2(model, vae, vision_encoder, dtype)
+    def execute(cls, model, dtype) -> io.NodeOutput:
+        bundle = loader.load_vosr2(model, dtype)
         return io.NodeOutput(bundle)
 
 

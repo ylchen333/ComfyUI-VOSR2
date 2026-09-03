@@ -1,16 +1,21 @@
-"""Discovery and strict loading of VOSR 2.0 components.
+"""Discovery and strict loading of a VOSR 2.0 bundle.
 
-Layout (see VOSR2.md "Model layout and discovery"):
-    ComfyUI/models/vosr2/<bundle>/args.json + checkpoints/ema_model.safetensors
-    ComfyUI/models/vae/VOSR2/<vae>/config.json + diffusion_pytorch_model.safetensors
-    ComfyUI/models/clip_vision/VOSR2/<checkpoint>.safetensors
+A bundle is a self-contained folder under ``ComfyUI/models/vosr2/`` -- VOSR 2.0
+is a fixed DiT/VAE/DINOv2 triple (see the layout comment below), so the three
+pieces are not independently selectable and live together:
 
-The one confirmed component set is fetched from the pinned Hugging Face repo
-``CSWRY/VOSR`` on first use, but only for paths that are missing -- once the
-files are in place nothing here touches the network. See ``ensure_vosr2_files``.
+    ComfyUI/models/vosr2/<bundle>/
+        args.json
+        checkpoints/ema_model.safetensors            (or clean_weights/, or bundle root)
+        Qwen-Image-vae-2d/{config.json, diffusion_pytorch_model.safetensors}
+        dinov2_vitl14.safetensors
 
-Every combo value returned to the node UI is later re-joined against its known
-root directory here, never taken as -- or resolved through -- an arbitrary path.
+The confirmed bundle is fetched from the pinned Hugging Face repo ``CSWRY/VOSR``
+on first use, but only for parts that are missing -- once the files are in place
+nothing here touches the network. See ``ensure_vosr2_files``.
+
+The ``model`` combo value is re-joined against ``_VOSR2_ROOT`` via
+``_safe_child_dir``, never taken as -- or resolved through -- an arbitrary path.
 """
 import json
 import logging
@@ -29,26 +34,31 @@ from .models.lightningdit import LightningDiT
 from .models.qwenimage_vae2d import AutoencoderKLQwenImage2D
 
 VOSR2_FOLDER_KEY = "vosr2"
-VAE_SUBDIR = "VOSR2"
-VISION_SUBDIR = "VOSR2"
 
 _VOSR2_ROOT = Path(folder_paths.models_dir) / "vosr2"
 _VOSR2_ROOT.mkdir(parents=True, exist_ok=True)
 folder_paths.add_model_folder_path(VOSR2_FOLDER_KEY, str(_VOSR2_ROOT))
 
-# The single VOSR 2.0 (one-step 1.4B) component set confirmed to work, and where
-# each piece lives in the pinned Hugging Face repo. These names are also the
-# default combo selections (see ``*_options`` below), so a fresh install always
-# has something selectable even before anything is on disk.
+# VOSR 2.0 is one indivisible artifact: the DiT runs entirely in *this* Qwen 2D
+# VAE's latent space (its channel count, scale factor, and per-channel
+# latents_mean/std), and is conditioned on *this* DINOv2-L feature extractor.
+# None of the three can be swapped independently, so they live together inside a
+# single bundle folder rather than in ComfyUI's shared vae/ and clip_vision/
+# trees. A bundle is a subdirectory of models/vosr2/ laid out as:
+#     <bundle>/args.json
+#     <bundle>/checkpoints/ema_model.safetensors      (or clean_weights/, or bundle root)
+#     <bundle>/Qwen-Image-vae-2d/{config.json,diffusion_pytorch_model.safetensors}
+#     <bundle>/dinov2_vitl14.safetensors
 HF_REPO_ID = "CSWRY/VOSR"
-KNOWN_MODEL = "VOSR2"
-KNOWN_VAE = "Qwen-Image-vae-2d"
-KNOWN_VISION = "dinov2_vitl14.safetensors"
+KNOWN_MODEL = "VOSR2"           # the one confirmed bundle; also the combo default
+_VAE_SUBDIR = "Qwen-Image-vae-2d"       # diffusers VAE dir inside the bundle
+_VAE_FILES = ("config.json", "diffusion_pytorch_model.safetensors")
+_VISION_FILENAME = "dinov2_vitl14.safetensors"  # converted DINOv2-L, inside the bundle
+
+# Paths of each piece inside the pinned HF repo. The DiT files carry a "VOSR2/"
+# prefix that becomes the bundle dir; the VAE files are fetched into the bundle.
 _DIT_HF_FILES = ("VOSR2/args.json", "VOSR2/checkpoints/ema_model.safetensors")
-_VAE_HF_FILES = (
-    "Qwen-Image-vae-2d/config.json",
-    "Qwen-Image-vae-2d/diffusion_pytorch_model.safetensors",
-)
+_VAE_HF_FILES = tuple(f"{_VAE_SUBDIR}/{name}" for name in _VAE_FILES)
 # DINOv2-L ships upstream as a raw torch pickle; the loader converts it to
 # safetensors on download (this package only ever ``load_file``s .safetensors).
 _DINOV2_HF_FILE = "torch_cache/checkpoints/dinov2_vitl14_pretrain.pth"
@@ -108,60 +118,16 @@ def list_model_bundles() -> list:
     )
 
 
-def _vae_root() -> Path:
-    for base in folder_paths.get_folder_paths("vae"):
-        candidate = Path(base) / VAE_SUBDIR
-        if candidate.is_dir():
-            return candidate
-    return Path(folder_paths.models_dir) / "vae" / VAE_SUBDIR
-
-
-def _vision_root() -> Path:
-    for base in folder_paths.get_folder_paths("clip_vision"):
-        candidate = Path(base) / VISION_SUBDIR
-        if candidate.is_dir():
-            return candidate
-    return Path(folder_paths.models_dir) / "clip_vision" / VISION_SUBDIR
-
-
-def list_vae_bundles() -> list:
-    root = _vae_root()
-    if not root.is_dir():
-        return []
-    return sorted(
-        p.name for p in root.iterdir()
-        if p.is_dir() and (p / "config.json").is_file() and (p / "diffusion_pytorch_model.safetensors").is_file()
-    )
-
-
-def list_vision_encoders() -> list:
-    root = _vision_root()
-    if not root.is_dir():
-        return []
-    return sorted(p.name for p in root.iterdir() if p.is_file() and p.suffix == ".safetensors")
-
-
-def _with_known(found: list, known: str) -> list:
-    """Combo options: whatever is on disk, but always offering the confirmed set.
+def model_options() -> list:
+    """Bundle combo options: whatever is on disk, but always offering ``KNOWN_MODEL``.
 
     ComfyUI snapshots combo ``options`` when the schema is built, so on a fresh
-    install the disk scans return ``[]`` and the dropdowns would be empty and
-    unselectable. Seeding them with the known name means the user can pick it and
-    run; the loader then downloads that set on first execute.
+    install ``list_model_bundles()`` returns ``[]`` and the dropdown would be
+    empty and unselectable. Seeding it with the confirmed name lets the user pick
+    it and run; the loader then downloads that bundle on first execute.
     """
-    return found if known in found else [known, *found]
-
-
-def model_options() -> list:
-    return _with_known(list_model_bundles(), KNOWN_MODEL)
-
-
-def vae_options() -> list:
-    return _with_known(list_vae_bundles(), KNOWN_VAE)
-
-
-def vision_options() -> list:
-    return _with_known(list_vision_encoders(), KNOWN_VISION)
+    found = list_model_bundles()
+    return found if KNOWN_MODEL in found else [KNOWN_MODEL, *found]
 
 
 def _convert_dinov2_pth_to_safetensors(src_pth: Path, dest: Path) -> None:
@@ -179,24 +145,23 @@ def _convert_dinov2_pth_to_safetensors(src_pth: Path, dest: Path) -> None:
     tmp.replace(dest)
 
 
-def ensure_vosr2_files(model_name: str, vae_name: str, vision_name: str) -> None:
-    """Fetch the confirmed VOSR 2.0 set from ``CSWRY/VOSR`` for missing paths only.
+def ensure_vosr2_files(model_name: str) -> None:
+    """Fetch the confirmed VOSR 2.0 bundle from ``CSWRY/VOSR`` for missing parts only.
 
     A no-op once the files are present -- it never contacts the network then.
-    Only the ``KNOWN_*`` selections can be auto-fetched; a custom folder/file name
-    that is absent is left for the normal "not found" errors in ``load_vosr2``,
-    since this code cannot know where such a file would come from.
+    Only ``KNOWN_MODEL`` can be auto-fetched; a custom bundle name that is absent
+    is left for the normal "not found" error in ``load_vosr2``, since this code
+    cannot know where such a bundle would come from.
     """
-    vae_base = _vae_root()
-    vision_base = _vision_root()
+    if model_name != KNOWN_MODEL:
+        return
 
-    dit_missing = model_name == KNOWN_MODEL and not all(
-        (_VOSR2_ROOT / f).is_file() for f in _DIT_HF_FILES
-    )
-    vae_missing = vae_name == KNOWN_VAE and not all(
-        (vae_base / f).is_file() for f in _VAE_HF_FILES
-    )
-    vision_missing = vision_name == KNOWN_VISION and not (vision_base / KNOWN_VISION).is_file()
+    bundle = _VOSR2_ROOT / KNOWN_MODEL
+    vae_dir = bundle / _VAE_SUBDIR
+
+    dit_missing = _find_dit_weight(bundle) is None or not (bundle / "args.json").is_file()
+    vae_missing = not all((vae_dir / name).is_file() for name in _VAE_FILES)
+    vision_missing = not (bundle / _VISION_FILENAME).is_file()
 
     if not (dit_missing or vae_missing or vision_missing):
         return
@@ -217,13 +182,13 @@ def ensure_vosr2_files(model_name: str, vae_name: str, vision_name: str) -> None
             hf_hub_download(HF_REPO_ID, f, local_dir=str(_VOSR2_ROOT))
     if vae_missing:
         logging.info("[VOSR2] downloading Qwen-Image 2D VAE from %s ...", HF_REPO_ID)
-        vae_base.mkdir(parents=True, exist_ok=True)
+        vae_dir.mkdir(parents=True, exist_ok=True)
         for f in _VAE_HF_FILES:
-            hf_hub_download(HF_REPO_ID, f, local_dir=str(vae_base))
+            hf_hub_download(HF_REPO_ID, f, local_dir=str(bundle))
     if vision_missing:
         logging.info("[VOSR2] downloading + converting DINOv2-L encoder from %s ...", HF_REPO_ID)
         src = hf_hub_download(HF_REPO_ID, _DINOV2_HF_FILE)
-        _convert_dinov2_pth_to_safetensors(Path(src), vision_base / KNOWN_VISION)
+        _convert_dinov2_pth_to_safetensors(Path(src), bundle / _VISION_FILENAME)
 
 
 def _load_args_json(bundle_dir: Path) -> dict:
@@ -249,7 +214,7 @@ def _load_args_json(bundle_dir: Path) -> dict:
     return args
 
 
-def _resolve_dit_weight_path(bundle_dir: Path) -> Path:
+def _find_dit_weight(bundle_dir: Path):
     for candidate in (
         bundle_dir / "clean_weights" / "ema_model.safetensors",
         bundle_dir / "checkpoints" / "ema_model.safetensors",
@@ -257,10 +222,17 @@ def _resolve_dit_weight_path(bundle_dir: Path) -> Path:
     ):
         if candidate.is_file():
             return candidate
-    raise VOSR2LoadError(
-        f"No ema_model.safetensors found under {bundle_dir} "
-        f"(looked in clean_weights/, checkpoints/, and the bundle root)."
-    )
+    return None
+
+
+def _resolve_dit_weight_path(bundle_dir: Path) -> Path:
+    weight = _find_dit_weight(bundle_dir)
+    if weight is None:
+        raise VOSR2LoadError(
+            f"No ema_model.safetensors found under {bundle_dir} "
+            f"(looked in clean_weights/, checkpoints/, and the bundle root)."
+        )
+    return weight
 
 
 def _clean_state_dict_keys(state_dict: dict) -> dict:
@@ -366,8 +338,8 @@ class VOSR2Model:
         return z - u
 
 
-def load_vosr2(model_name: str, vae_name: str, vision_name: str, dtype: str) -> VOSR2Model:
-    ensure_vosr2_files(model_name, vae_name, vision_name)
+def load_vosr2(model_name: str, dtype: str) -> VOSR2Model:
+    ensure_vosr2_files(model_name)
 
     bundle_dir = _safe_child_dir(_VOSR2_ROOT, model_name)
     if not bundle_dir.is_dir():
@@ -375,14 +347,21 @@ def load_vosr2(model_name: str, vae_name: str, vision_name: str, dtype: str) -> 
     args = _load_args_json(bundle_dir)
     dit_weight_path = _resolve_dit_weight_path(bundle_dir)
 
-    vae_dir = _safe_child_dir(_vae_root(), vae_name)
-    if not vae_dir.is_dir():
-        raise VOSR2LoadError(f"VOSR2 VAE not found: {vae_name!r}")
+    # The VAE and vision encoder are part of the bundle -- VOSR 2.0 is a fixed
+    # DiT/VAE/DINOv2 triple, not independently selectable components.
+    vae_dir = bundle_dir / _VAE_SUBDIR
+    if not (vae_dir / "config.json").is_file():
+        raise VOSR2LoadError(
+            f"VOSR2 bundle {bundle_dir} is missing its Qwen-Image 2D VAE "
+            f"({vae_dir}/config.json). The VAE's latent space is tied to this DiT "
+            f"and cannot be substituted."
+        )
 
-    vision_root = _vision_root()
-    vision_path = _safe_child_dir(vision_root, vision_name)
+    vision_path = bundle_dir / _VISION_FILENAME
     if not vision_path.is_file():
-        raise VOSR2LoadError(f"VOSR2 vision encoder checkpoint not found: {vision_name!r}")
+        raise VOSR2LoadError(
+            f"VOSR2 bundle {bundle_dir} is missing its DINOv2-L encoder ({vision_path})."
+        )
 
     load_device = comfy.model_management.get_torch_device()
     offload_device = comfy.model_management.unet_offload_device()

@@ -31,16 +31,16 @@ upscale node so that queued images do not rebuild several GB of weights.
 
 | Input | Default | Notes |
 |---|---|---|
-| `model` | `VOSR2` | Bundle folder under `models/vosr2/` (must contain `args.json`) |
-| `vae` | `Qwen-Image-vae-2d` | Qwen-Image 2D VAE folder under `models/vae/VOSR2/` |
-| `vision_encoder` | `dinov2_vitl14.safetensors` | DINOv2-L `.safetensors` under `models/clip_vision/VOSR2/` |
+| `model` | `VOSR2` | Bundle folder under `models/vosr2/` — the DiT plus its matched VAE and vision encoder |
 | `dtype` | `default` | `default` / `fp16` / `bf16` for the DiT + vision encoder. The VAE always runs in fp32. |
 
-Leave the three model dropdowns on their defaults unless you have added your own
-folders. On the first run each missing piece is downloaded from `CSWRY/VOSR`;
-`args.json` is then validated against the fixed VOSR 2.0 architecture before
-anything is constructed — an incompatible checkpoint fails loudly instead of
-loading partially.
+VOSR 2.0 is a **fixed DiT + VAE + vision-encoder set** — the DiT only works with
+the specific Qwen 2D VAE it was trained against, so the VAE and vision encoder
+aren't separate inputs; they live inside the bundle folder. Leave `model` on
+`VOSR2` unless you've added your own bundle. On the first run any missing part is
+downloaded from `CSWRY/VOSR`; `args.json` is then validated against the fixed
+VOSR 2.0 architecture before anything is constructed — an incompatible checkpoint
+fails loudly instead of loading partially.
 
 ### VOSR 2.0 Upscale (`VOSR2Upscale`)
 
@@ -67,44 +67,40 @@ One-step super-resolution on an `IMAGE` batch.
 
 ## Model files
 
+> The VAE's latent space is specific to `ema_model.safetensors` — you can't swap
+> in a different VAE (unless the VOSR authors release a new matched one). Same for
+> the DINOv2-L encoder. All three are one set.
+
 **You normally don't need this section** — the loader downloads everything below
 from [`CSWRY/VOSR`](https://huggingface.co/CSWRY/VOSR) the first time it runs. It's
 here for offline installs, air-gapped machines, or if you'd rather manage the
 files yourself. The loader detects existing files and skips the download.
 
-The assets come from the official **[CSWRY/VOSR](https://huggingface.co/CSWRY/VOSR)**
-Hugging Face repo, arranged like this under your ComfyUI install:
+Because the three pieces are one set, they live in **one bundle folder**,
+`models/vosr2/VOSR2/`:
 
 ```
-ComfyUI/models/
-├── vosr2/
-│   └── VOSR2/
-│       ├── args.json
-│       └── checkpoints/
-│           └── ema_model.safetensors
-├── vae/
-│   └── VOSR2/
-│       └── Qwen-Image-vae-2d/
-│           ├── config.json
-│           └── diffusion_pytorch_model.safetensors
-└── clip_vision/
-    └── VOSR2/
-        └── dinov2_vitl14.safetensors
+ComfyUI/models/vosr2/VOSR2/
+├── args.json
+├── checkpoints/
+│   └── ema_model.safetensors
+├── Qwen-Image-vae-2d/
+│   ├── config.json
+│   └── diffusion_pytorch_model.safetensors
+└── dinov2_vitl14.safetensors
 ```
 
-| File in repo | Direct download | Put it at |
+| File in `CSWRY/VOSR` | Direct download | Put it at |
 |---|---|---|
 | `VOSR2/args.json` | [link](https://huggingface.co/CSWRY/VOSR/resolve/main/VOSR2/args.json) | `models/vosr2/VOSR2/args.json` |
 | `VOSR2/checkpoints/ema_model.safetensors` | [link](https://huggingface.co/CSWRY/VOSR/resolve/main/VOSR2/checkpoints/ema_model.safetensors) | `models/vosr2/VOSR2/checkpoints/ema_model.safetensors` |
-| `Qwen-Image-vae-2d/config.json` | [link](https://huggingface.co/CSWRY/VOSR/resolve/main/Qwen-Image-vae-2d/config.json) | `models/vae/VOSR2/Qwen-Image-vae-2d/config.json` |
-| `Qwen-Image-vae-2d/diffusion_pytorch_model.safetensors` | [link](https://huggingface.co/CSWRY/VOSR/resolve/main/Qwen-Image-vae-2d/diffusion_pytorch_model.safetensors) | `models/vae/VOSR2/Qwen-Image-vae-2d/diffusion_pytorch_model.safetensors` |
-| `torch_cache/checkpoints/dinov2_vitl14_pretrain.pth` | [link](https://huggingface.co/CSWRY/VOSR/resolve/main/torch_cache/checkpoints/dinov2_vitl14_pretrain.pth) | convert → `models/clip_vision/VOSR2/dinov2_vitl14.safetensors` (see below) |
+| `Qwen-Image-vae-2d/config.json` | [link](https://huggingface.co/CSWRY/VOSR/resolve/main/Qwen-Image-vae-2d/config.json) | `models/vosr2/VOSR2/Qwen-Image-vae-2d/config.json` |
+| `Qwen-Image-vae-2d/diffusion_pytorch_model.safetensors` | [link](https://huggingface.co/CSWRY/VOSR/resolve/main/Qwen-Image-vae-2d/diffusion_pytorch_model.safetensors) | `models/vosr2/VOSR2/Qwen-Image-vae-2d/diffusion_pytorch_model.safetensors` |
+| `torch_cache/checkpoints/dinov2_vitl14_pretrain.pth` | [link](https://huggingface.co/CSWRY/VOSR/resolve/main/torch_cache/checkpoints/dinov2_vitl14_pretrain.pth) | convert → `models/vosr2/VOSR2/dinov2_vitl14.safetensors` (see below) |
 
-> The `model` / `vae` / `vision_encoder` dropdowns are seeded with the names
-> above (`VOSR2`, `Qwen-Image-vae-2d`, `dinov2_vitl14.safetensors`) and default
-> to them. You can add extra folders next to these and they'll appear in the
-> dropdowns too — the loader discovers any subfolder with the right files inside
-> — but only the default set is auto-downloaded.
+> The `model` dropdown is seeded with `VOSR2` and defaults to it. Drop additional
+> bundle folders next to it and they'll appear in the dropdown too (any subfolder
+> of `models/vosr2/` with an `args.json`), but only `VOSR2` is auto-downloaded.
 
 The DINOv2-L file in the repo is a raw PyTorch pickle
 (`dinov2_vitl14_pretrain.pth`); the loader converts it to
@@ -119,7 +115,7 @@ sd = torch.load("dinov2_vitl14_pretrain.pth", map_location="cpu", weights_only=T
 save_file({k: v.contiguous() for k, v in sd.items()}, "dinov2_vitl14.safetensors")
 ```
 
-then place `dinov2_vitl14.safetensors` in `models/clip_vision/VOSR2/`. The keys
+then place `dinov2_vitl14.safetensors` in `models/vosr2/VOSR2/`. The keys
 are the original Meta `facebookresearch/dinov2` names
 (`blocks.N.attn.qkv.*`, `blocks.N.ls1.gamma`, …), matching the vendored
 architecture in [`models/dinov2.py`](models/dinov2.py) — do **not** use the
@@ -144,10 +140,9 @@ git clone https://github.com/ylchen333/ComfyUI-VOSR2
 # restart ComfyUI
 ```
 
-Then add a **VOSR 2.0 Model Loader**, leave the dropdowns on their defaults, and
-run — the ~7 GB of weights download from `CSWRY/VOSR` on that first execution and
-are reused afterward. (To pre-place them instead, see
-[Model files](#model-files).)
+Then add a **VOSR 2.0 Model Loader**, leave `model` on `VOSR2`, and run — the
+~7 GB bundle downloads from `CSWRY/VOSR` on that first execution and is reused
+afterward. (To pre-place it instead, see [Model files](#model-files).)
 
 #### Installing via Git URL
 
@@ -179,23 +174,22 @@ toggle.
 
 ### Example workflows
 
-- **[`docs/vosr_workflow_examples.json`](docs/vosr_workflow_examples.json)** —
+- **[`example_workflows/vosr_workflow_examples.json`](example_workflows/vosr_workflow_examples.json)** —
   a drag-and-drop starter file. Drop it onto the ComfyUI canvas to load
   ready-made VOSR 2.0 graphs (loader → upscale, tiling presets already wired).
   The quickest way to get going.
-- **`docs/local_workflow.png`** — the same setup running locally in ComfyUI, for
-  reference:
+- **`example_workflows/local_workflow.png`** — the same setup running locally in
+  ComfyUI, for reference:
 
-  ![VOSR 2.0 example workflow in ComfyUI](docs/local_workflow.png)
+  ![VOSR 2.0 example workflow in ComfyUI](example_workflows/local_workflow.png)
 
 - **RunComfy** — hosted example-workflow links will be added here once VOSR 2.0
   is confirmed installable through RunComfy's Node Manager.
 
 ### Manual setup
 
-1. **VOSR 2.0 Model Loader** — pick `model` = `VOSR2`, `vae` =
-   `Qwen-Image-vae-2d`, `vision_encoder` = `dinov2_vitl14.safetensors`, leave
-   `dtype` on `default` (use `fp16`/`bf16` to save VRAM).
+1. **VOSR 2.0 Model Loader** — leave `model` on `VOSR2` and `dtype` on `default`
+   (use `fp16`/`bf16` to save VRAM).
 2. Feed an image into **VOSR 2.0 Upscale** together with the loader's `model`
    output.
 3. Set `upscale` (1–4). If the result exceeds 512 px on a side, set
