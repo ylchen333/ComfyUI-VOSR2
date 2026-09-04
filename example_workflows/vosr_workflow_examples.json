@@ -5,42 +5,6 @@
   "last_link_id": 237,
   "nodes": [
     {
-      "id": 11,
-      "type": "SaveImage",
-      "pos": [
-        5235.127145147961,
-        697.1791539007716
-      ],
-      "size": [
-        429.875,
-        497.125
-      ],
-      "flags": {},
-      "order": 8,
-      "mode": 4,
-      "inputs": [
-        {
-          "name": "images",
-          "type": "IMAGE",
-          "link": 24
-        }
-      ],
-      "outputs": [
-        {
-          "name": "images",
-          "type": "IMAGE",
-          "links": null
-        }
-      ],
-      "properties": {},
-      "widgets_values": [
-        "painting_style_"
-      ],
-      "widgets_values_named": {
-        "filename_prefix": "painting_style_"
-      }
-    },
-    {
       "id": 21,
       "type": "VOSR2ModelLoader",
       "pos": [
@@ -48,8 +12,8 @@
         114.94729234046603
       ],
       "size": [
-        270,
-        170
+        278.65625,
+        114
       ],
       "flags": {},
       "order": 0,
@@ -73,8 +37,6 @@
       ],
       "widgets_values_named": {
         "model": "VOSR2",
-        "vae": "Qwen-Image-vae-2d",
-        "vision_encoder": "dinov2_vitl14.safetensors",
         "dtype": "default"
       }
     },
@@ -162,9 +124,7 @@
         {
           "name": "images",
           "type": "IMAGE",
-          "links": [
-            24
-          ]
+          "links": []
         }
       ],
       "properties": {
@@ -183,7 +143,7 @@
         551.625
       ],
       "flags": {},
-      "order": 9,
+      "order": 8,
       "mode": 0,
       "inputs": [
         {
@@ -211,12 +171,12 @@
         -544.2675807441049
       ],
       "size": [
-        270,
-        170
+        275.1875,
+        114
       ],
       "flags": {},
       "order": 1,
-      "mode": 4,
+      "mode": 0,
       "inputs": [],
       "outputs": [
         {
@@ -236,8 +196,6 @@
       ],
       "widgets_values_named": {
         "model": "VOSR2",
-        "vae": "Qwen-Image-vae-2d",
-        "vision_encoder": "dinov2_vitl14.safetensors",
         "dtype": "default"
       }
     },
@@ -254,7 +212,7 @@
       ],
       "flags": {},
       "order": 4,
-      "mode": 4,
+      "mode": 0,
       "inputs": [
         {
           "name": "model",
@@ -313,7 +271,7 @@
       ],
       "flags": {},
       "order": 7,
-      "mode": 4,
+      "mode": 0,
       "inputs": [
         {
           "name": "images",
@@ -345,7 +303,7 @@
       ],
       "flags": {},
       "order": 2,
-      "mode": 4,
+      "mode": 0,
       "inputs": [],
       "outputs": [
         {
@@ -365,11 +323,11 @@
         "Node name for S&R": "LoadImage"
       },
       "widgets_values": [
-        "kcon_1.jpg",
+        "lr.png",
         "image"
       ],
       "widgets_values_named": {
-        "image": "kcon_1.jpg",
+        "image": "lr.png",
         "upload": "image"
       }
     },
@@ -457,7 +415,7 @@
         "previewExposures": []
       },
       "widgets_values": [
-        "two people on an infomercial set, standing behind a table with three products on the table top, photorealistic rendering",
+        "two people on a 2000s children's toy infomercial set, standing behind a table with three products on the table top, photorealistic rendering",
         1024,
         1024,
         "flux2_dev_fp8mixed.safetensors",
@@ -465,10 +423,10 @@
         "flux2-vae.safetensors",
         "80s commercial fp8.safetensors",
         false,
-        1027111520328378
+        634950299280504
       ],
       "widgets_values_named": {
-        "text": "two people on an infomercial set, standing behind a table with three products on the table top, photorealistic rendering",
+        "text": "two people on a 2000s children's toy infomercial set, standing behind a table with three products on the table top, photorealistic rendering",
         "width": 1024,
         "height": 1024,
         "unet_name": "flux2_dev_fp8mixed.safetensors",
@@ -476,19 +434,11 @@
         "vae_name": "flux2-vae.safetensors",
         "lora_name": "80s commercial fp8.safetensors",
         "value": false,
-        "noise_seed": 1027111520328378
+        "noise_seed": 634950299280504
       }
     }
   ],
   "links": [
-    [
-      24,
-      23,
-      0,
-      11,
-      0,
-      "IMAGE"
-    ],
     [
       25,
       21,
@@ -2235,15 +2185,15 @@
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.35584102738367945,
+      "scale": 0.2673486306413821,
       "offset": [
-        -2660.85187241881,
-        1146.8126979846118
+        -1841.898133975033,
+        1668.6617018994473
       ]
     },
     "node_versions": {
-      "comfy-core": "0.34.0",
-      "ComfyUI-VOSR2": "d7eeecc09e26cf9c9b0a87b1dc511830e45e4eb1"
+      "ComfyUI-VOSR2": "1a46fd5e78e5f2de5e6a4525f04374301ce9b09d",
+      "comfy-core": "0.34.0"
     },
     "VHS_latentpreview": true,
     "VHS_latentpreviewrate": 0,
