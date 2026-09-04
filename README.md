@@ -9,6 +9,7 @@ upstream [`cswry/VOSR`](https://github.com/cswry/VOSR) repository.
 - Upstream weights: <https://huggingface.co/CSWRY/VOSR>
 - This node package: <https://github.com/ylchen333/ComfyUI-VOSR2>
 
+
 **The model files download themselves on first use.** The first time you run the
 **VOSR 2.0 Model Loader**, any missing component is fetched from the pinned
 [`CSWRY/VOSR`](https://huggingface.co/CSWRY/VOSR) Hugging Face repo into your
@@ -18,6 +19,8 @@ never used. If you prefer to place the files by hand, see
 [Model files](#model-files) — the loader skips the download whenever they are
 already present.
 
+---
+![VOSR2 is best for preserving fine structures and text readability.](./VOSR_cases/vis_comp.jpg)
 ---
 
 ## Nodes
@@ -231,6 +234,39 @@ does this package. Treat these as starting points, not guarantees:
 
 `fp16` / `bf16` (via the loader's `dtype`) roughly halves DiT + vision-encoder
 memory; the Qwen VAE always runs in fp32.
+
+---
+
+## VOSR2 examples
+
+The following are some examples of input low-resolution images and output after VOSR Upscale.
+
+<table>
+<tr>
+<td align="center"><b>Low resolution</b></td>
+<td align="center"><b>Upscaled</b></td>
+</tr>
+<tr>
+<td align="center">Building<br><img src="./VOSR_cases/building/lr.png" alt="low resolution building"></td>
+<td align="center">Building<br><img src="./VOSR_cases/building/vosr_2_0.png" alt="upscaled building"></td>
+</tr>
+<tr>
+<td align="center">Landscape<br><img src="./VOSR_cases/landscape/lr.png" alt="low resolution landscape"></td>
+<td align="center">Landscape<br><img src="./VOSR_cases/landscape/vosr_2_0.png" alt="upscaled landscape"></td>
+</tr>
+<tr>
+<td align="center">Faces<br><img src="./VOSR_cases/tiny_face/lr.png" alt="low resolution faces"></td>
+<td align="center">Faces<br><img src="./VOSR_cases/tiny_face/vosr_2_0.png" alt="upscaled faces"></td>
+</tr>
+<tr>
+<td align="center">English text<br><img src="./VOSR_cases/tiny_text_english/lr.png" alt="low resolution english text"></td>
+<td align="center">English text<br><img src="./VOSR_cases/tiny_text_english/vosr_2_0.png" alt="upscaled english text"></td>
+</tr>
+<tr>
+<td align="center">Chinese text<br><img src="./VOSR_cases/tiny_text_chinese/lr.png" alt="low resolution chinese text"></td>
+<td align="center">Chinese text<br><img src="./VOSR_cases/tiny_text_chinese/vosr_2_0.png" alt="upscaled chinese text"></td>
+</tr>
+</table>
 
 ---
 
