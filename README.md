@@ -19,8 +19,8 @@ never used. If you prefer to place the files by hand, see
 [Model files](#model-files) — the loader skips the download whenever they are
 already present.
 
----
-![VOSR2 is best for preserving fine structures and text readability.](./VOSR_cases/vis_comp.jpg)
+<!-- ---
+![VOSR2 is best for preserving fine structures and text readability.](./VOSR_cases/vis_comp.jpg) -->
 ---
 
 ## Nodes
@@ -236,9 +236,10 @@ memory; the Qwen VAE always runs in fp32.
 
 ## VOSR2 examples
 
-The following are some examples of input low-resolution images and output after VOSR Upscale.
 
-<table>
+> **Interactive version:** Visit [VOSR 2.0 project page](https://cswry.github.io/vosr2/) and drag-to-reveal slider over each pair.
+
+<!-- <table>
 <tr>
 <td align="center"><b>Low resolution</b></td>
 <td align="center"><b>Upscaled</b></td>
@@ -263,7 +264,7 @@ The following are some examples of input low-resolution images and output after 
 <td align="center">Chinese text<br><img src="./VOSR_cases/tiny_text_chinese/lr.png" alt="low resolution chinese text"></td>
 <td align="center">Chinese text<br><img src="./VOSR_cases/tiny_text_chinese/vosr_2_0.png" alt="upscaled chinese text"></td>
 </tr>
-</table>
+</table> -->
 
 ---
 
