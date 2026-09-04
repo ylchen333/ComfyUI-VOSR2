@@ -13,7 +13,7 @@ upstream [`cswry/VOSR`](https://github.com/cswry/VOSR) repository.
 **The model files download themselves on first use.** The first time you run the
 **VOSR 2.0 Model Loader**, any missing component is fetched from the pinned
 [`CSWRY/VOSR`](https://huggingface.co/CSWRY/VOSR) Hugging Face repo into your
-ComfyUI `models/` directory (~7 GB total). Nothing downloads at import or
+ComfyUI `models/` directory (~7 GB total), thus the first run will take a second. Nothing downloads at import or
 validation time, only the one pinned repo is ever contacted, and `torch.hub` is
 never used. If you prefer to place the files by hand, see
 [Model files](#model-files) — the loader skips the download whenever they are
@@ -165,12 +165,8 @@ registry.comfy.org it installs through Manager's normal search without either
 toggle.
 
 ### RunComfy
-
-> **Not yet documented.** A working RunComfy install path has not been
-> confirmed: uploading the model files by hand fails (file-size limit) and the
-> RunComfy terminal whitelist has no `wget`. This section will be written once
-> a success case is verified.
-
+Via the Custom Nodes Manager, install 0.4.0 (or whatever the latest version is). Then restart.
+  
 ---
 
 ## Usage
@@ -184,10 +180,11 @@ toggle.
 - **`example_workflows/local_workflow.png`** — the same setup running locally in
   ComfyUI, for reference:
 
-  ![VOSR 2.0 example workflow in ComfyUI](example_workflows/local_workflow.png)
+  ![VOSR 2.0 example workflow in ComfyUI](example_workflows/vosr_workflow_screenshot.png)
 
-- **RunComfy** — hosted example-workflow links will be added here once VOSR 2.0
-  is confirmed installable through RunComfy's Node Manager.
+- **RunComfy** — Link to workflow [here](https://www.runcomfy.com/comfyui-workflows/my-workflows?shared_workflow=764db3d9-242d-87a7-4157-3cd95923fea7).
+
+- **Comfy Cloud** — hosted example-workflow links will be added here once custom nodes are supported on Comfy Cloud.
 
 ### Manual setup
 
