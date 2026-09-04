@@ -184,7 +184,7 @@ toggle.
 - **`example_workflows/local_workflow.png`** — the same setup running locally in
   ComfyUI, for reference:
 
-  ![VOSR 2.0 example workflow in ComfyUI](example_workflows/vosr_workflow_screenshot.png)
+  ![VOSR 2.0 example workflow in ComfyUI](example_workflows/local_workflow.png)
 
 - **RunComfy** — hosted example-workflow links will be added here once VOSR 2.0
   is confirmed installable through RunComfy's Node Manager.
