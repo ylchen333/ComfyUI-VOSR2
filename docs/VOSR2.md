@@ -18,6 +18,7 @@ Contacted directly; the following are now confirmed rather than assumed, and sha
 - **Still open, not resolved by his reply:** he confirmed VOSR 2.0 as conceptually distinct from VOSR 1's one-step 1.4B (`VOSR_1.4B_os`) and said to "use the name VOSR 2.0," which is consistent with the locally downloaded folder being named `VOSR2` rather than `VOSR_1.4B_os` — but he did not confirm the literal folder/file naming. **Verify the actual downloaded folder name before finalizing the "Model layout and discovery" paths below**; treat `vosr2/VOSR2-1.4B/` there as provisional.
 - **New open issue from testing, not yet root-caused:** closely-inspected enlarged faces can show grid-like artifacts. The author called this out as more serious than the general softness/limited-generative-detail complaint that's otherwise the most common community feedback. Worth an explicit visual-inspection checkpoint during validation (see Tests) rather than assuming it's covered by general quality comparison against upstream.
 - **Naming, display vs. code:** he asked specifically to use "VOSR 2.0" (with the space and the period) rather than "VOSR 1" in how the integration is presented. Code identifiers, folder names, and node categories below stay as `VOSR2` / `ComfyUI-VOSR2` (spaces and periods aren't practical there), but human-facing strings — node display names, README title, Registry listing name — should read "VOSR 2.0," not "VOSR2." Called out explicitly under Nodes below.
+- **`upscale` cap relaxed (2026-09-06):** asked directly whether the node's 1-4x limit was necessary. His answer: no hard cap is needed — training saw degradations corresponding to downsampling ratios up to 16x, so higher factors are supported architecturally. But he was explicit that there's no general quality guarantee past ~4x: results depend on the specific image and its starting/target resolution, not on the scale factor alone, and with proper tiled inference VOSR 2.0 can also handle 4K inputs. His suggestion was to relax the limit and let users try higher values, treating bad cases at large factors as useful feedback for the next version rather than something to pre-emptively block. `upscale` is now uncapped (`min=1`, no `max`) with a tooltip carrying this caveat, rather than hard-limited to `4`.
 
 ## Goal
 
@@ -66,7 +67,7 @@ Input/output: ComfyUI `IMAGE`, `BHWC` RGB float `[0,1]`
 |---|---:|---|---|
 | `model` | required | `VOSR2_MODEL` | Loaded runtime bundle |
 | `image` | required | `IMAGE` | Image or batch |
-| `upscale` | `4` | integer `1..4` | Exact output multiplier |
+| `upscale` | `4` | integer `>= 1`, uncapped | Exact output multiplier |
 | `seed` | `42` | ComfyUI seed range | Initial latent-noise seed |
 | `color_alignment` | `wavelet` | `wavelet`, `adain`, `none` | Upstream postprocessing mode |
 | `tile_size` | `0` | `0..4096`, step 64 | DiT pixel tile; zero disables |

@@ -194,14 +194,25 @@ def run_vosr2(
         # batch_size x output resolution regardless of tile_size, defeating
         # the point for large multi-item batches. Move each item off the GPU
         # as soon as it's decoded so only one item's output is ever GPU-
-        # resident at a time; concatenate on CPU instead.
-        outputs_pm1 = torch.cat([
-            _run_tiled_single(model, resized01[i:i + 1], seed + i, tile_size, tile_overlap, vae_tile_size, vae_tile_overlap, pbar=pbar).cpu()
-            for i in range(b)
-        ], dim=0)
+        # resident at a time.
+        #
+        # Color alignment also has to happen per item here, not on the
+        # concatenated batch afterward: wavelet/adain run a Gaussian blur
+        # over the whole tensor at once (color.py), so doing it post-concat
+        # means one CPU allocation sized to the *entire* batch's decoded
+        # output -- for large images/batches that's tens of GB of system
+        # RAM even though nothing is GPU-resident anymore. Aligning each
+        # item right after it's decoded caps that allocation at one item's
+        # size, matching the per-item VRAM bound above.
+        aligned_items = []
+        for i in range(b):
+            item_pm1 = _run_tiled_single(model, resized01[i:i + 1], seed + i, tile_size, tile_overlap, vae_tile_size, vae_tile_overlap, pbar=pbar).cpu()
+            item01 = (item_pm1.clamp(-1.0, 1.0) + 1.0) / 2.0
+            aligned_items.append(apply_color_alignment(item01, resized01[i:i + 1].cpu(), color_alignment))
+        aligned01 = torch.cat(aligned_items, dim=0)
     else:
         outputs_pm1 = _run_untiled_batch(model, resized01, seed, vae_tile_size, vae_tile_overlap)
+        decoded01 = (outputs_pm1.clamp(-1.0, 1.0) + 1.0) / 2.0
+        aligned01 = apply_color_alignment(decoded01, resized01, color_alignment)
 
-    decoded01 = (outputs_pm1.clamp(-1.0, 1.0) + 1.0) / 2.0
-    aligned01 = apply_color_alignment(decoded01, resized01.to(decoded01.device), color_alignment)
     return aligned01.movedim(1, -1)

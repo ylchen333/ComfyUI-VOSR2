@@ -43,7 +43,7 @@ class VOSR2Upscale(io.ComfyNode):
             inputs=[
                 io.Custom("VOSR2_MODEL").Input("model", tooltip="Loaded VOSR 2.0 bundle."),
                 io.Image.Input("image"),
-                io.Int.Input("upscale", default=4, min=1, max=4, tooltip="Exact output multiplier."),
+                io.Int.Input("upscale", default=4, min=1, max=sys.maxsize, tooltip="Exact output multiplier. VOSR 2.0 was trained on degradations up to 16x, so higher factors are supported, but there's no general quality guarantee above ~4x -- results depend on the specific image and starting/target resolution, not just the factor. Uncapped so you can experiment; use tiling for large outputs."),
                 io.Int.Input("seed", default=42, min=0, max=sys.maxsize, control_after_generate=io.ControlAfterGenerate.fixed, tooltip="Initial latent-noise seed."),
                 io.Combo.Input("color_alignment", options=["wavelet", "adain", "none"], default="wavelet"),
                 io.Int.Input("tile_size", default=0, min=0, max=4096, step=64, tooltip="DiT pixel tile size; 0 disables tiling. VOSR 2.0 was trained natively at up to 512px, so tiling is required (e.g. 512) whenever the upscaled output exceeds 512x512 -- otherwise quality degrades."),

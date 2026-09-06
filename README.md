@@ -53,7 +53,7 @@ One-step super-resolution on an `IMAGE` batch.
 |---|---:|---|---|
 | `model` | — | `VOSR2_MODEL` | From the loader |
 | `image` | — | `IMAGE` | Single image or batch |
-| `upscale` | `4` | `1`–`4` | Exact output multiplier |
+| `upscale` | `4` | ≥ 1, uncapped | Exact output multiplier |
 | `seed` | `42` | ≥ 0 | Latent-noise seed; batch item *i* uses `seed + i` |
 | `color_alignment` | `wavelet` | `wavelet` / `adain` / `none` | Post-process against the bicubic target |
 | `tile_size` | `0` | `0`–`4096`, step 64 | DiT pixel tile; `0` disables tiling |
@@ -192,8 +192,11 @@ Via the Custom Nodes Manager, install 0.4.0 (or whatever the latest version is).
    (use `fp16`/`bf16` to save VRAM).
 2. Feed an image into **VOSR 2.0 Upscale** together with the loader's `model`
    output.
-3. Set `upscale` (1–4). If the result exceeds 512 px on a side, set
-   `tile_size = 512`. If it exceeds ~1024 px, also set `vae_tile_size = 1024`.
+3. Set `upscale` (≥ 1, no hard cap — VOSR 2.0 was trained on degradations up
+   to 16x, but quality past ~4x isn't guaranteed and depends on the specific
+   image and resolution, not just the factor). If the result exceeds 512 px
+   on a side, set `tile_size = 512`. If it exceeds ~1024 px, also set
+   `vae_tile_size = 1024`.
 4. `color_alignment` defaults to `wavelet`; `adain` or `none` are available for
    comparison.
 
