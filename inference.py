@@ -189,13 +189,19 @@ def run_vosr2(
         _, _, h, w = resized01.shape
         total_tiles = b * _count_dit_tiles(h, w, tile_size, tile_overlap)
         pbar = comfy.utils.ProgressBar(total_tiles)
+        # Tiling bounds peak VRAM per item, but a batch's items were still
+        # accumulating on GPU here until the final cat -- peak VRAM grew with
+        # batch_size x output resolution regardless of tile_size, defeating
+        # the point for large multi-item batches. Move each item off the GPU
+        # as soon as it's decoded so only one item's output is ever GPU-
+        # resident at a time; concatenate on CPU instead.
         outputs_pm1 = torch.cat([
-            _run_tiled_single(model, resized01[i:i + 1], seed + i, tile_size, tile_overlap, vae_tile_size, vae_tile_overlap, pbar=pbar)
+            _run_tiled_single(model, resized01[i:i + 1], seed + i, tile_size, tile_overlap, vae_tile_size, vae_tile_overlap, pbar=pbar).cpu()
             for i in range(b)
         ], dim=0)
     else:
         outputs_pm1 = _run_untiled_batch(model, resized01, seed, vae_tile_size, vae_tile_overlap)
 
     decoded01 = (outputs_pm1.clamp(-1.0, 1.0) + 1.0) / 2.0
-    aligned01 = apply_color_alignment(decoded01, resized01, color_alignment)
+    aligned01 = apply_color_alignment(decoded01, resized01.to(decoded01.device), color_alignment)
     return aligned01.movedim(1, -1)

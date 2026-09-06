@@ -6,12 +6,18 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
+import comfy.ops
+
+# See models/dinov2.py for why disable_weight_init is the right variant here:
+# identical forward()/state_dict keys to plain torch.nn, just ComfyUI-native.
+ops = comfy.ops.disable_weight_init
+
 
 class SwiGLUFFN(nn.Module):
     def __init__(self, in_features: int, hidden_features: int, bias: bool = True) -> None:
         super().__init__()
-        self.w12 = nn.Linear(in_features, 2 * hidden_features, bias=bias)
-        self.w3 = nn.Linear(hidden_features, in_features, bias=bias)
+        self.w12 = ops.Linear(in_features, 2 * hidden_features, bias=bias)
+        self.w3 = ops.Linear(hidden_features, in_features, bias=bias)
 
     def forward(self, x: Tensor) -> Tensor:
         x1, x2 = self.w12(x).chunk(2, dim=-1)

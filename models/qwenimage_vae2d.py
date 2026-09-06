@@ -17,6 +17,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from safetensors.torch import load_file
 
+import comfy.ops
+
+# See models/dinov2.py for why disable_weight_init is the right variant here:
+# identical forward()/state_dict keys to plain torch.nn, just ComfyUI-native.
+ops = comfy.ops.disable_weight_init
+
 # Qwen-Image VAE per-channel latent normalization constants (from the
 # upstream checkpoint's config.json defaults).
 DEFAULT_LATENTS_MEAN = [-0.7571, -0.7089, -0.9113, 0.1075, -0.1745, 0.9653, -0.1517, 1.5508,
@@ -64,10 +70,10 @@ class ResidualBlock2D(nn.Module):
     def __init__(self, in_dim: int, out_dim: int):
         super().__init__()
         self.norm1 = RMSNorm2D(in_dim)
-        self.conv1 = nn.Conv2d(in_dim, out_dim, kernel_size=3, padding=1)
+        self.conv1 = ops.Conv2d(in_dim, out_dim, kernel_size=3, padding=1)
         self.norm2 = RMSNorm2D(out_dim)
-        self.conv2 = nn.Conv2d(out_dim, out_dim, kernel_size=3, padding=1)
-        self.conv_shortcut = nn.Conv2d(in_dim, out_dim, kernel_size=1) if in_dim != out_dim else nn.Identity()
+        self.conv2 = ops.Conv2d(out_dim, out_dim, kernel_size=3, padding=1)
+        self.conv_shortcut = ops.Conv2d(in_dim, out_dim, kernel_size=1) if in_dim != out_dim else nn.Identity()
 
     def forward(self, x):
         h = self.conv_shortcut(x)
@@ -82,8 +88,8 @@ class AttentionBlock2D(nn.Module):
     def __init__(self, dim: int):
         super().__init__()
         self.norm = RMSNorm2D(dim)
-        self.to_qkv = nn.Conv2d(dim, dim * 3, kernel_size=1)
-        self.proj = nn.Conv2d(dim, dim, kernel_size=1)
+        self.to_qkv = ops.Conv2d(dim, dim * 3, kernel_size=1)
+        self.proj = ops.Conv2d(dim, dim, kernel_size=1)
 
     def forward(self, x):
         identity = x
@@ -105,12 +111,12 @@ class Resample2D(nn.Module):
         if mode == "upsample2d":
             self.resample = nn.Sequential(
                 nn.Upsample(scale_factor=2.0, mode="nearest"),
-                nn.Conv2d(dim, dim // 2, kernel_size=3, padding=1),
+                ops.Conv2d(dim, dim // 2, kernel_size=3, padding=1),
             )
         elif mode == "downsample2d":
             self.resample = nn.Sequential(
                 nn.ZeroPad2d((0, 1, 0, 1)),
-                nn.Conv2d(dim, dim, kernel_size=3, stride=2),
+                ops.Conv2d(dim, dim, kernel_size=3, stride=2),
             )
         else:
             self.resample = nn.Identity()
@@ -143,7 +149,7 @@ class Encoder2D(nn.Module):
         dims = [dim * u for u in [1] + list(dim_mult)]
         scale = 1.0
 
-        self.conv_in = nn.Conv2d(3, dims[0], kernel_size=3, padding=1)
+        self.conv_in = ops.Conv2d(3, dims[0], kernel_size=3, padding=1)
 
         self.down_blocks = nn.ModuleList([])
         for i, (in_dim, out_dim) in enumerate(zip(dims[:-1], dims[1:])):
@@ -158,7 +164,7 @@ class Encoder2D(nn.Module):
 
         self.mid_block = MidBlock2D(out_dim, num_layers=1)
         self.norm_out = RMSNorm2D(out_dim)
-        self.conv_out = nn.Conv2d(out_dim, z_dim, kernel_size=3, padding=1)
+        self.conv_out = ops.Conv2d(out_dim, z_dim, kernel_size=3, padding=1)
 
     def forward(self, x):
         x = self.conv_in(x)
@@ -194,7 +200,7 @@ class Decoder2D(nn.Module):
         dim_mult = list(dim_mult)
         dims = [dim * u for u in [dim_mult[-1]] + dim_mult[::-1]]
 
-        self.conv_in = nn.Conv2d(z_dim, dims[0], kernel_size=3, padding=1)
+        self.conv_in = ops.Conv2d(z_dim, dims[0], kernel_size=3, padding=1)
         self.mid_block = MidBlock2D(dims[0], num_layers=1)
 
         self.up_blocks = nn.ModuleList([])
@@ -205,7 +211,7 @@ class Decoder2D(nn.Module):
             self.up_blocks.append(UpBlock2D(in_dim, out_dim, num_res_blocks, upsample_mode))
 
         self.norm_out = RMSNorm2D(out_dim)
-        self.conv_out = nn.Conv2d(out_dim, 3, kernel_size=3, padding=1)
+        self.conv_out = ops.Conv2d(out_dim, 3, kernel_size=3, padding=1)
 
     def forward(self, x):
         x = self.conv_in(x)
@@ -235,8 +241,8 @@ class AutoencoderKLQwenImage2D(nn.Module):
         self.latents_std = list(latents_std) if latents_std is not None else list(DEFAULT_LATENTS_STD)
 
         self.encoder = Encoder2D(dim=base_dim, z_dim=z_dim * 2, dim_mult=dim_mult, num_res_blocks=num_res_blocks, attn_scales=attn_scales)
-        self.quant_conv = nn.Conv2d(z_dim * 2, z_dim * 2, kernel_size=1)
-        self.post_quant_conv = nn.Conv2d(z_dim, z_dim, kernel_size=1)
+        self.quant_conv = ops.Conv2d(z_dim * 2, z_dim * 2, kernel_size=1)
+        self.post_quant_conv = ops.Conv2d(z_dim, z_dim, kernel_size=1)
         self.decoder = Decoder2D(dim=base_dim, z_dim=z_dim, dim_mult=dim_mult, num_res_blocks=num_res_blocks)
 
     def encode(self, x: torch.Tensor) -> EncoderOutput:

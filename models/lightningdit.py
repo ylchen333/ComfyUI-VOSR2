@@ -17,9 +17,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import comfy.ops
+
 from .pos_embed import VisionRotaryEmbeddingFast
 from .rmsnorm import RMSNorm
 from .swiglu_ffn import SwiGLUFFN
+
+# See models/dinov2.py for why disable_weight_init is the right variant here:
+# identical forward()/state_dict keys to plain torch.nn, just ComfyUI-native.
+ops = comfy.ops.disable_weight_init
 
 
 class PatchEmbed(nn.Module):
@@ -29,7 +35,7 @@ class PatchEmbed(nn.Module):
         super().__init__()
         self.img_size = (img_size, img_size)
         self.patch_size = (patch_size, patch_size)
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size, bias=bias)
+        self.proj = ops.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size, bias=bias)
 
     @property
     def num_patches(self):
@@ -44,9 +50,9 @@ class Mlp(nn.Module):
     def __init__(self, in_features, hidden_features, out_features=None, act_layer=nn.GELU):
         super().__init__()
         out_features = out_features or in_features
-        self.fc1 = nn.Linear(in_features, hidden_features)
+        self.fc1 = ops.Linear(in_features, hidden_features)
         self.act = act_layer()
-        self.fc2 = nn.Linear(hidden_features, out_features)
+        self.fc2 = ops.Linear(hidden_features, out_features)
 
     def forward(self, x):
         return self.fc2(self.act(self.fc1(x)))
@@ -62,10 +68,10 @@ class MultiHeadCrossAttention(nn.Module):
         self.head_dim = d_model // num_heads
         self.fused_attn = fused_attn
 
-        self.q_linear = nn.Linear(d_model, d_model)
-        self.k_linear = nn.Linear(d_model, d_model)
-        self.v_linear = nn.Linear(d_model, d_model)
-        self.proj = nn.Linear(d_model, d_model)
+        self.q_linear = ops.Linear(d_model, d_model)
+        self.k_linear = ops.Linear(d_model, d_model)
+        self.v_linear = ops.Linear(d_model, d_model)
+        self.proj = ops.Linear(d_model, d_model)
 
         if qk_norm:
             self.q_norm = RMSNorm(self.head_dim)
@@ -110,12 +116,12 @@ class Attention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
 
-        norm_layer = RMSNorm if use_rmsnorm else nn.LayerNorm
+        norm_layer = RMSNorm if use_rmsnorm else ops.LayerNorm
 
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+        self.qkv = ops.Linear(dim, dim * 3, bias=qkv_bias)
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
-        self.proj = nn.Linear(dim, dim)
+        self.proj = ops.Linear(dim, dim)
 
     def forward(self, x, rope=None):
         B, N, C = x.shape
@@ -137,9 +143,9 @@ class TimestepEmbedder(nn.Module):
         super().__init__()
         self.frequency_embedding_size = frequency_embedding_size
         self.mlp = nn.Sequential(
-            nn.Linear(frequency_embedding_size, hidden_size, bias=True),
+            ops.Linear(frequency_embedding_size, hidden_size, bias=True),
             nn.SiLU(),
-            nn.Linear(hidden_size, hidden_size, bias=True),
+            ops.Linear(hidden_size, hidden_size, bias=True),
         )
 
     @staticmethod
@@ -172,8 +178,8 @@ class LightningDiTBlock(nn.Module):
     ):
         super().__init__()
         if not use_rmsnorm:
-            self.norm1 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
-            self.norm2 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
+            self.norm1 = ops.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
+            self.norm2 = ops.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         else:
             self.norm1 = RMSNorm(hidden_size)
             self.norm2 = RMSNorm(hidden_size)
@@ -208,9 +214,9 @@ class LightningDiTBlock(nn.Module):
 class FinalLayer(nn.Module):
     def __init__(self, hidden_size, patch_size, out_channels, use_rmsnorm=False):
         super().__init__()
-        self.norm_final = RMSNorm(hidden_size) if use_rmsnorm else nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
-        self.linear = nn.Linear(hidden_size, patch_size * patch_size * out_channels, bias=True)
-        self.adaLN_modulation = nn.Sequential(nn.SiLU(), nn.Linear(hidden_size, 2 * hidden_size, bias=True))
+        self.norm_final = RMSNorm(hidden_size) if use_rmsnorm else ops.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
+        self.linear = ops.Linear(hidden_size, patch_size * patch_size * out_channels, bias=True)
+        self.adaLN_modulation = nn.Sequential(nn.SiLU(), ops.Linear(hidden_size, 2 * hidden_size, bias=True))
 
     def forward(self, x, c):
         shift, scale = self.adaLN_modulation(c).chunk(2, dim=1)
@@ -258,7 +264,7 @@ class LightningDiT(nn.Module):
         else:
             self.feat_rope = None
 
-        self.t_block = nn.Sequential(nn.SiLU(), nn.Linear(hidden_size, 6 * hidden_size, bias=True))
+        self.t_block = nn.Sequential(nn.SiLU(), ops.Linear(hidden_size, 6 * hidden_size, bias=True))
 
         self.blocks = nn.ModuleList([
             LightningDiTBlock(
@@ -271,7 +277,7 @@ class LightningDiT(nn.Module):
         self.z_dims = z_dims
         if self.z_dims is not None:
             self.num_fused_layers = num_fused_layers
-            self.layer_norm = nn.LayerNorm(z_dims)
+            self.layer_norm = ops.LayerNorm(z_dims)
             self.mlp_ca = Mlp(z_dims, hidden_size * encdim_ratio, out_features=hidden_size, act_layer=lambda: nn.GELU(approximate="tanh"))
 
         self.auxiliary_time_cond = auxiliary_time_cond

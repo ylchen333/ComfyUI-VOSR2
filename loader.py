@@ -27,6 +27,7 @@ from safetensors.torch import load_file, save_file
 
 import comfy.model_management
 import comfy.model_patcher
+import comfy.utils
 import folder_paths
 
 from .models.dinov2 import build_dinov2_vitl14
@@ -131,7 +132,10 @@ def model_options() -> list:
 
 
 def _convert_dinov2_pth_to_safetensors(src_pth: Path, dest: Path) -> None:
-    state = torch.load(str(src_pth), map_location="cpu", weights_only=True)
+    # comfy.utils.load_torch_file wraps torch.load with ComfyUI's own
+    # conventions (weights_only=True, mmap where supported, state_dict/
+    # single-key unwrapping) instead of calling torch.load directly.
+    state = comfy.utils.load_torch_file(str(src_pth), safe_load=True)
     if not isinstance(state, dict):
         raise VOSR2LoadError(
             f"Unexpected DINOv2 checkpoint format at {src_pth}: expected a flat state dict."

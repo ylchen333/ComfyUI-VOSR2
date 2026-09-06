@@ -15,6 +15,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import comfy.ops
+
+# comfy.ops.disable_weight_init.{Conv2d,Linear,LayerNorm} subclass the plain
+# torch.nn equivalents directly (same state_dict keys, same forward() unless
+# ComfyUI later patches weights), skipping only their random-init cost -- so
+# strict checkpoint loading and numerics are unaffected, while VOSR2's DINOv2
+# encoder becomes visible to ComfyUI's dtype-casting/lowvram machinery like
+# any other native model.
+ops = comfy.ops.disable_weight_init
+
 DINOV2_VITL14_CONFIG = dict(
     img_size=518,
     patch_size=14,
@@ -29,7 +39,7 @@ class PatchEmbed(nn.Module):
     def __init__(self, img_size, patch_size, embed_dim):
         super().__init__()
         self.patch_size = patch_size
-        self.proj = nn.Conv2d(3, embed_dim, kernel_size=patch_size, stride=patch_size)
+        self.proj = ops.Conv2d(3, embed_dim, kernel_size=patch_size, stride=patch_size)
 
     def forward(self, x):
         x = self.proj(x)
@@ -50,8 +60,8 @@ class Attention(nn.Module):
         super().__init__()
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
-        self.qkv = nn.Linear(dim, dim * 3, bias=True)
-        self.proj = nn.Linear(dim, dim, bias=True)
+        self.qkv = ops.Linear(dim, dim * 3, bias=True)
+        self.proj = ops.Linear(dim, dim, bias=True)
 
     def forward(self, x):
         B, N, C = x.shape
@@ -65,9 +75,9 @@ class Attention(nn.Module):
 class Mlp(nn.Module):
     def __init__(self, dim, hidden_dim):
         super().__init__()
-        self.fc1 = nn.Linear(dim, hidden_dim)
+        self.fc1 = ops.Linear(dim, hidden_dim)
         self.act = nn.GELU()
-        self.fc2 = nn.Linear(hidden_dim, dim)
+        self.fc2 = ops.Linear(hidden_dim, dim)
 
     def forward(self, x):
         return self.fc2(self.act(self.fc1(x)))
@@ -76,10 +86,10 @@ class Mlp(nn.Module):
 class Block(nn.Module):
     def __init__(self, dim, num_heads, mlp_ratio):
         super().__init__()
-        self.norm1 = nn.LayerNorm(dim, eps=1e-6)
+        self.norm1 = ops.LayerNorm(dim, eps=1e-6)
         self.attn = Attention(dim, num_heads)
         self.ls1 = LayerScale(dim)
-        self.norm2 = nn.LayerNorm(dim, eps=1e-6)
+        self.norm2 = ops.LayerNorm(dim, eps=1e-6)
         self.mlp = Mlp(dim, int(dim * mlp_ratio))
         self.ls2 = LayerScale(dim)
 
@@ -102,7 +112,7 @@ class DinoVisionTransformer(nn.Module):
         self.mask_token = nn.Parameter(torch.zeros(1, embed_dim))
 
         self.blocks = nn.ModuleList([Block(embed_dim, num_heads, mlp_ratio) for _ in range(depth)])
-        self.norm = nn.LayerNorm(embed_dim, eps=1e-6)
+        self.norm = ops.LayerNorm(embed_dim, eps=1e-6)
 
     def interpolate_pos_encoding(self, x, w, h):
         """Vendored verbatim from facebookresearch/dinov2 (Apache-2.0): bicubic-resizes

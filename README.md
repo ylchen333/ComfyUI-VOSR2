@@ -236,8 +236,7 @@ memory; the Qwen VAE always runs in fp32.
 
 ## VOSR2 examples
 
-
-> **Interactive version:** Visit [VOSR 2.0 project page](https://cswry.github.io/vosr2/) and drag-to-reveal slider over each pair.
+**Interactive version:** Visit [VOSR 2.0 project page](https://cswry.github.io/vosr2/) and drag-to-reveal slider over each pair.
 
 <!-- <table>
 <tr>
