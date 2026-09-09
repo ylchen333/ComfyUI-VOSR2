@@ -1,0 +1,18 @@
+name: comfy-test
+on:
+  workflow_dispatch:
+    inputs:
+      branch:   { type: string, default: main }
+      platform:
+        type: choice
+        default: linux-cpu
+        options: [linux-cpu, windows-cpu, macos-cpu, windows-portable-cpu]
+
+jobs:
+  test:
+    uses: PozzettiAndrea/comfy-test/.github/workflows/dispatch-test.yml@v0.4.5
+    with:
+      node_repo: ${{ github.repository }}
+      branch:    ${{ inputs.branch }}
+      platform:  ${{ inputs.platform }}
+    secrets: inherit
