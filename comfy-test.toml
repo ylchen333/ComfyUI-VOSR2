@@ -1,0 +1,23 @@
+# comfy-test config -- https://github.com/PozzettiAndrea/comfy-test (workflow pinned @v0.4.5)
+#
+# For now this is an install / import / registration smoke test across CPU OSes.
+# "execution" is intentionally omitted: VOSR 2.0 is a one-step 1.4B model that
+# needs a GPU -- running it on CPU CI runners would download multi-GB weights
+# and then OOM or time out. Add GPU platforms + "execution" once self-hosted
+# CUDA runners are available.
+
+[test]
+levels = ["syntax", "install", "registration", "instantiation"]
+publish = false
+
+[test.platforms]
+linux = true
+macos = true
+windows = true
+windows_portable = true
+linux_gpu = false
+windows_gpu = false
+windows_portable_gpu = false
+macos_desktop = false
+windows_desktop = false
+windows_desktop_gpu = false
